@@ -121,7 +121,6 @@ src/
     cockpit.js           F2: overlay (top window only), panels, checklist
     em-parse.js          pure functions: parse action-cell hrefs, duplicate table, author table (unit-testable)
     main-world.js        tiny MAIN-world bridge for editorAssignment (needed: see docs/findings.md §5)
-    spikes.js            M0 test panel (dev mode only); delete once M0 is closed
     styles.css           all UI styles, namespaced (prefix .preh-), never style EM's own elements
   background/
     service-worker.js    storage helpers if needed; dev hot-reload watcher

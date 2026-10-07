@@ -72,12 +72,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Content scripts ping on every EM page load: this wakes the worker (and the
 // poll loop) if Chrome had stopped it.
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (!msg) return;
-  if (msg.type === 'preh:hello') sendResponse({ ok: true });
-  if (msg.type === 'preh:stamp') {
-    readStamp().then((stamp) => sendResponse({ stamp }));
-    return true; // async response
-  }
+  if (msg && msg.type === 'preh:hello') sendResponse({ ok: true });
 });
 
 init();

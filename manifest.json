@@ -23,7 +23,7 @@
         "src/storage.js",
         "src/content/em-parse.js",
         "src/content/list.js",
-        "src/content/spikes.js",
+        "src/content/cockpit.js",
         "src/content/router.js"
       ]
     },

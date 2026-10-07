@@ -8,7 +8,7 @@ data stays in `chrome.storage.local`. See `CLAUDE.md` for the full brief and
 ## Install (unpacked)
 1. chrome://extensions → enable Developer mode → **Load unpacked** → select this folder.
 2. Run `scripts/stamp.sh` once (creates `dev-stamp.txt`, used by hot reload).
-3. Extension popup → tick **Dev mode** to enable hot reload and the M0 spike panel.
+3. Extension popup → tick **Dev mode** to enable hot reload (`scripts/stamp.sh` reloads the extension and EM tabs).
 
 ## Tests
 - `node --test test/*.test.js` — parser tests, no dependencies. The DOM tests

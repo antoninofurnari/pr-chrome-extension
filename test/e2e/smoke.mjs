@@ -50,8 +50,10 @@ const check = (cond, label) => { console.log((cond ? 'PASS ' : 'FAIL ') + label)
 await ctx.route('https://www.editorialmanager.com/**', (route) => {
   const u = new URL(route.request().url());
   const p = u.pathname.replace(/^\/pr\//, '');
+  // The real page 302s to Turnitin. Playwright does not intercept a redirect's
+  // target inside an iframe (it would go to the network), so serve a stand-in.
   if (p === 'CrossCheckResults.aspx') {
-    return route.fulfill({ status: 302, headers: { location: 'https://elsevier.turnitin.com/viewer/submissions/x' } });
+    return route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>stand-in for the Turnitin report</h1>' });
   }
   if (route.request().method() !== 'GET') {
     check(false, 'non-GET request to EM: ' + route.request().method() + ' ' + p);
@@ -60,7 +62,6 @@ await ctx.route('https://www.editorialmanager.com/**', (route) => {
   if (pages[p]) return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: pages[p] });
   return route.fulfill({ status: 404, body: 'not in fixtures' });
 });
-await ctx.route('https://elsevier.turnitin.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<h1>report</h1>' }));
 await ctx.route('https://mfe-ux.triage.elsevier.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<p>mfe</p>' }));
 
 // Service worker
@@ -73,54 +74,6 @@ await sw.evaluate(() => chrome.storage.local.set({ 'preh:dev': true }));
 const page = await ctx.newPage();
 page.on('pageerror', (e) => check(false, 'page error: ' + e.message));
 await page.goto('https://www.editorialmanager.com/pr/default2.aspx');
-await page.waitForSelector('.preh-spikes', { timeout: 5000 });
-check(true, 'spike panel injected in top window');
-check(await page.frameLocator('#content').locator('.preh-spikes').count() === 0, 'no spike panel inside iframe#content');
-
-const logText = () => page.locator('.preh-log').inputValue();
-await page.click('.preh-spikes-head');
-await page.waitForFunction(() => document.getElementById('content').contentDocument.querySelectorAll('tr[data-rowindex]').length > 0);
-await page.click('text=Read list');
-let log = await logText();
-check(/Frozen grid: found; 2 rows/.test(log), 'list parsed (2 rows)');
-check(!/PR-D-/.test(log), 'log contains no manuscript numbers');
-check(!/UNRECOGNISED/.test(log), 'manuscript numbers still parsed with badges injected');
-
-await page.click('text=2 · Duplicate');
-await page.waitForFunction(() => /Spike 2 GET/.test(document.querySelector('.preh-log').value) && /candidate rows parsed/.test(document.querySelector('.preh-log').value));
-log = await logText();
-check(/3 candidate rows parsed in iframe/.test(log), 'duplicate iframe readable');
-check(/candidates=3 emScore=35 maxTitle=82 maxAbstract=71 ok=false/.test(log), 'duplicate summary computed');
-await page.keyboard.press('Escape');
-check(await page.locator('.preh-overlay').count() === 0, 'Esc closes overlay');
-
-await page.click('text=3 · Turnitin');
-await page.waitForFunction(() => /Spike 3: iframe navigated cross-origin|Spike 3: iframe stayed/.test(document.querySelector('.preh-log').value));
-log = await logText();
-check(/"Completed" link found/.test(log), 'similarity Completed link parsed');
-check(/navigated cross-origin/.test(log), 'CrossCheck iframe followed redirect cross-origin');
-await page.keyboard.press('Escape');
-
-await page.click('text=4 · Evaluate');
-await page.waitForFunction(() => /#iframe_msa/.test(document.querySelector('.preh-log').value));
-check(/#iframe_msa present, host=mfe-ux.triage.elsevier.com/.test(await logText()), 'evaluate inner iframe found');
-await page.keyboard.press('Escape');
-
-await page.click('text=5b · Assign (main)');
-await page.waitForFunction(() => /main world replied/.test(document.querySelector('.preh-log').value));
-check(/replied ok=true/.test(await logText()), 'main-world bridge replied ok');
-check(await page.evaluate(() => window.__assignCalls) === 1, 'editorAssignment called once in top window');
-
-await page.click('text=5a · Assign (click)');
-await page.waitForTimeout(300);
-const frameCalls = await page.frame({ name: 'content' }).evaluate(() => window.__assignCalls || 0);
-// Chrome does not run javascript: hrefs for clicks dispatched from an isolated world.
-check(frameCalls === 0, 'isolated-world click on a javascript: link does nothing (use the MAIN-world bridge)');
-
-await page.click('text=Authors');
-await page.waitForFunction(() => /authors=\d/.test(document.querySelector('.preh-log').value));
-check(/authors=4; onlyReviewEditing=1; noRoles=1/.test(await logText()), 'author status parsed');
-await page.keyboard.press('Escape');
 
 // ---- M1: badges and popover on the list ----
 const list = page.frame({ name: 'content' });
@@ -166,6 +119,8 @@ const popup = await ctx.newPage();
 await popup.goto(`chrome-extension://${extId}/src/popup/popup.html?tab=1`);
 await popup.waitForFunction(() => document.getElementById('count').textContent === '1');
 check(true, 'F3: popup counts 1 record');
+await popup.waitForFunction(() => /^\d+$/.test(document.getElementById('build').textContent));
+check(true, 'popup shows the build stamp');
 const [download] = await Promise.all([popup.waitForEvent('download'), popup.click('#export')]);
 const exported = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
 check(exported.format === 'preh-notes-v1' && exported.records['PR-D-26-00001'].note === 'synthetic note', 'F3: export contains the record');
@@ -179,7 +134,67 @@ await popup.close();
 await page.waitForTimeout(300);
 check(await list.locator('.preh-badge[data-ms="PR-D-26-00002R1"] .preh-chip').textContent() === 'Done', 'F3: imported status shown on the list');
 
-check(/Build stamp: \d+/.test(await logText()), 'build stamp readable via service worker');
+
+// ---- M2: cockpit ----
+const cockpit = page.locator('.preh-cockpit');
+const sum = (title) => cockpit.locator('.preh-panel', { hasText: title }).locator('.preh-sum');
+await list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-triage-btn').click();
+await cockpit.waitFor();
+check(await list.locator('.preh-cockpit').count() === 0, 'M2: cockpit is in the top window, not in the list frame');
+check(await cockpit.locator('.preh-cockpit-ms').textContent() === 'PR-D-26-00001', 'M2: header shows the manuscript number');
+check(await cockpit.locator('.preh-cockpit-status').inputValue() === 'Waiting (reply)', 'M2: header status loaded from storage');
+// Left: Similarity -> CrossCheckResults -> (fake) Turnitin
+await page.waitForFunction(() => {
+  const f = document.querySelector('iframe[name="preh-similarity"]');
+  try { return f && /CrossCheckResults/.test(f.contentWindow.location.href) && f.contentDocument.readyState === 'complete'; } catch (_) { return false; }
+}, null, { timeout: 5000 });
+check(page.frame({ name: 'preh-similarity' }).url() ===
+  'https://www.editorialmanager.com/pr/CrossCheckResults.aspx?docID=100001&msid=%7BAAA-111%7D&APISubmissionID=api-0000-1111',
+  'M2: left pane loads CrossCheckResults.aspx with the APISubmissionID from the Similarity page');
+// Duplicate summary (computed from the iframe)
+await page.waitForFunction(() => /title/.test(document.querySelector('.preh-cockpit .preh-panel .preh-sum').textContent));
+check(await sum('Duplicate').textContent() === 'EM 35% · title 82% · abstract 71% · 2 > 70%', 'M2: duplicate summary');
+check(/preh-sum-bad/.test(await sum('Duplicate').getAttribute('class')), 'M2: duplicate summary is red');
+// Author Status (Details GET -> iframe)
+await page.waitForFunction(() => /authors/.test([...document.querySelectorAll('.preh-cockpit .preh-panel .preh-sum')][1].textContent));
+check(await sum('Author Status').textContent() === '4 authors · 1 only review & editing · 1 without roles', 'M2: author summary');
+check(await page.frame({ name: 'preh-authors' }).url().includes('ContributingAuthorStatus.aspx'), 'M2: author panel shows Author Status');
+// Evaluate: collapsed and not loaded until opened
+check(await page.locator('iframe[name="preh-evaluate"]').count() === 0, 'M2: Evaluate not loaded while collapsed');
+check(await sum('Evaluate').textContent() === 'warning icon: no', 'M2: evaluate warning summary');
+await cockpit.locator('.preh-panel-head', { hasText: 'Evaluate' }).click();
+await page.waitForSelector('iframe[name="preh-evaluate"]');
+await page.waitForFunction(() => { try { return !!document.querySelector('iframe[name="preh-evaluate"]').contentDocument.querySelector('#iframe_msa'); } catch (_) { return false; } });
+check(true, 'M2: Evaluate loads on expand (with inner iframe)');
+// No content-script UI inside the cockpit's own iframes
+check(await page.frame({ name: 'preh-duplicate' }).locator('.preh-badge, .preh-cockpit').count() === 0, 'M2: no extension UI inside panel iframes');
+// Status in header -> list badge
+await cockpit.locator('.preh-cockpit-status').selectOption('In triage');
+await page.waitForTimeout(300);
+check(await list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-chip').textContent() === 'In triage', 'M2: header status updates the list badge');
+// Assign Editor via MAIN-world bridge
+await cockpit.locator('button', { hasText: 'Open Assign Editor' }).click();
+await page.waitForTimeout(300);
+check(await page.evaluate(() => window.__assignCalls) === 1, 'M2: Open Assign Editor calls editorAssignment once (top window)');
+// Esc from inside a same-origin panel closes the cockpit
+await page.frame({ name: 'preh-duplicate' }).locator('body').press('Escape');
+await page.waitForTimeout(200);
+check(await cockpit.count() === 0, 'M2: Esc inside a panel closes the cockpit');
+check(await list.locator('.preh-badge').count() === 2, 'M2: list unchanged after closing');
+// Revision row shows the Step 0 hint
+await list.locator('.preh-badge[data-ms="PR-D-26-00002R1"] .preh-triage-btn').click();
+await cockpit.waitFor();
+check(await cockpit.locator('.preh-cockpit-bar', { hasText: 'Revision R1' }).count() === 1, 'M2: revision hint for R1');
+check(await sum('Evaluate').textContent() === 'warning icon: yes', 'M2: evaluate warning detected on row 2');
+// Decision: navigates iframe#content and closes the cockpit
+await cockpit.locator('button', { hasText: 'Open Decision page' }).click();
+await page.waitForTimeout(500);
+check(await cockpit.count() === 0, 'M2: Open Decision page closes the cockpit');
+check(page.frame({ name: 'content' }).url().includes('/pr/EditorDecision.aspx?docid=100002'), 'M2: iframe#content navigated to EditorDecision.aspx');
+// Messages from other frames are ignored
+await page.evaluate(() => window.postMessage({ type: 'preh:openCockpit', ms: 'PR-D-26-00001', similarityUrl: 'javascript:alert(1)' }, location.origin));
+await page.waitForTimeout(200);
+check(await cockpit.count() === 0, 'M2: openCockpit only accepted from iframe#content');
 
 // Hot reload: change the stamp and expect the worker to call chrome.runtime.reload().
 // Under Playwright (--load-extension) the reloaded extension does not come back,
@@ -190,7 +205,6 @@ const t0 = Date.now();
 while (Date.now() - t0 < 6000 && ctx.serviceWorkers().length >= swBefore) await page.waitForTimeout(200);
 check(ctx.serviceWorkers().length < swBefore, `hot reload: stamp change detected, chrome.runtime.reload() called after ${Date.now() - t0} ms`);
 
-if (process.env.SHOW_LOG) console.log("---- LOG ----\n" + await logText().catch(() => "(n/a)"));
 await ctx.close();
 fs.rmSync(userDataDir, { recursive: true, force: true });
 console.log(failures ? `\n${failures} FAILED` : '\nALL PASSED');

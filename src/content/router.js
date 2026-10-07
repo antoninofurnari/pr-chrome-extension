@@ -23,8 +23,6 @@
   const ctx = context();
   PREH.context = ctx;
 
-  if (ctx === 'top') {
-    PREH.storage.isDev().then((dev) => { if (dev) PREH.spikes.init(); });
-  }
+  if (ctx === 'top') PREH.cockpit.init();
   if (ctx === 'content') PREH.list.init();
 })();

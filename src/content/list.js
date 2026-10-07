@@ -72,7 +72,29 @@
   // badges
   // ---------------------------------------------------------------------------
 
-  function makeBadge(ms) {
+  // What the cockpit (top window) needs for one row. URLs come from the
+  // row's action cell (em-parse.js).
+  function cockpitPayload(row) {
+    const a = row.actions || {};
+    return {
+      type: 'preh:openCockpit',
+      ms: row.ms,
+      docId: row.docId,
+      revision: row.revision,
+      similarityUrl: a.similarityUrl,
+      similarityPct: a.similarityPct,
+      duplicateUrl: a.duplicateUrl,
+      duplicateScore: a.duplicateScore,
+      detailsUrl: a.details ? a.details.url : null,
+      evaluateUrl: a.evaluateUrl,
+      evaluateWarning: !!(a.evaluateWarning && a.evaluateWarning.present),
+      decisionUrl: a.decisionUrl,
+      assignEditorArgs: a.assignEditorArgs,
+    };
+  }
+
+  function makeBadge(row) {
+    const ms = row.ms;
     const badge = el('span', 'preh-badge');
     badge.dataset.ms = ms;
     const chip = el('button', 'preh-chip preh-st-none', '—');
@@ -81,6 +103,18 @@
     const note = el('button', 'preh-note-icon', '✎');
     note.type = 'button';
     badge.append(chip, note);
+    if (row.actions) {
+      const triage = el('button', 'preh-triage-btn', 'Triage');
+      triage.type = 'button';
+      triage.title = 'Open the triage cockpit';
+      triage.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closePopover();
+        window.top.postMessage(cockpitPayload(row), location.origin);
+      });
+      badge.append(triage);
+    }
     // Keep EM's own row handlers out of it.
     badge.addEventListener('click', (e) => {
       e.preventDefault();
@@ -104,7 +138,7 @@
     const rows = P.parseGrid(document).filter((r) => P.isMsNumber(r.ms));
     for (const r of rows) {
       const cell = r.dataRow.querySelector('td');
-      if (cell && !cell.querySelector('.preh-badge')) cell.append(makeBadge(r.ms));
+      if (cell && !cell.querySelector('.preh-badge')) cell.append(makeBadge(r));
     }
     await renderAll();
   }

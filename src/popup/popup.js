@@ -11,6 +11,12 @@ function say(text) { $('msg').textContent = text; }
 async function refresh() {
   $('count').textContent = Object.keys(await S.all()).length;
   $('dev').checked = await S.isDev();
+  try {
+    const res = await fetch(chrome.runtime.getURL('dev-stamp.txt'), { cache: 'no-store' });
+    $('build').textContent = res.ok ? (await res.text()).trim() : 'no dev-stamp.txt';
+  } catch (_) {
+    $('build').textContent = 'no dev-stamp.txt (run scripts/stamp.sh)';
+  }
 }
 
 $('export').addEventListener('click', async () => {

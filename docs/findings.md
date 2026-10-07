@@ -1,6 +1,8 @@
 # M0 findings
 
-**M0 closed on 2026-10-07**: all spikes pass on the live site.
+**M0 closed on 2026-10-07**: all spikes pass on the live site. The spike
+panel (`src/content/spikes.js`) was removed afterwards; it is in the git
+history (commit 52d6057) if a spike needs re-running.
 
 Status of the Milestone 0 spikes (CLAUDE.md). "Local" = verified with
 `test/e2e/smoke.mjs` (unpacked extension in Chromium, EM replaced by the
@@ -12,7 +14,7 @@ spikes" in the bottom-right corner of EM → "Copy log").
 |---|---|---|---|
 | 1 | Extension loads; hot reload | Stamp change detected in ~1.5 s, `chrome.runtime.reload()` called. Chrome serves the updated `dev-stamp.txt` without caching. Tab reload not verifiable under Playwright (see below). | **OK** (2026-10-07): loads, hot reload works end to end with Load unpacked. |
 | 2 | Iframe of `DuplicateSubmissionCheckResults.aspx` from the top window | Renders, same-origin, table readable from the parent. GET + DOMParser summary works. | **OK**, renders. Slow: ~15 s for a page with several hundred candidates. EM repeats candidate rows: count distinct manuscripts (see below). |
-| 3 | Iframe of `CrossCheckResults.aspx` → Turnitin | Redirect is followed inside the iframe (fake Turnitin page renders). | **OK: Turnitin renders inside the iframe.** The left-half popup fallback also works but is not needed. |
+| 3 | Iframe of `CrossCheckResults.aspx` → Turnitin | Not testable locally: Playwright does not intercept the redirect target inside an iframe (the "cross-origin" frame seen in M0 was Chrome's error page). The test now checks the CrossCheckResults URL instead. | **OK: Turnitin renders inside the iframe.** The left-half popup fallback also works but is not needed. |
 | 4 | Iframe of `ViewEvaluateManuscript.aspx` incl. inner `mfe-ux` iframe | Wrapper renders, `#iframe_msa` found. | **OK**, inner `mfe-ux` panel renders. |
 | 5 | Open Assign Editor from an extension button | **Click dispatch does not work** (see below). MAIN-world bridge calls `editorAssignment(...)` correctly. | 5a: nothing opens (as expected). **5b: works** (opens in a new tab, same as EM's own link). |
 
