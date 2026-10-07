@@ -244,6 +244,13 @@
     ]],
   ];
   const DECISIONS = ['', 'Reject (Potential ethics concern)', 'Reject and offer transfer', 'Send back to author (via Managing Editor)', 'Assign Editor'];
+  // Choosing a decision also sets the status shown on the list.
+  const DECISION_STATUS = {
+    'Reject (Potential ethics concern)': 'Ready to reject',
+    'Reject and offer transfer': 'Ready to reject',
+    'Send back to author (via Managing Editor)': 'Send back requested',
+    'Assign Editor': 'Ready to assign',
+  };
   const ITEM_COUNT = CHECKLIST.reduce((n, [, , items]) => n + items.length, 0);
 
   function checklistDrawer(d, rec, right) {
@@ -301,7 +308,13 @@
     }
     decision.addEventListener('change', () => {
       checklist.decision = decision.value;
-      save();
+      const status = DECISION_STATUS[decision.value];
+      if (status) {
+        // The header selector follows via chrome.storage.onChanged.
+        S.update(d.ms, { checklist: Object.assign({}, checklist), status, statusAt: new Date().toISOString() });
+      } else {
+        save();
+      }
     });
     step5.append(decision);
     drawer.append(step5);

@@ -205,6 +205,16 @@ check(await drawer.locator('.preh-step', { hasText: '3 · Author Status' }).loca
 await drawer.locator('input[data-id="s1_overlap"]').check();
 await drawer.locator('input[data-id="s2_dup"]').check();
 await drawer.locator('.preh-decision').selectOption('Reject and offer transfer');
+await page.waitForTimeout(300);
+check(await cockpit.locator('.preh-cockpit-status').inputValue() === 'Ready to reject', 'M3: Reject decision sets status Ready to reject (header)');
+check(await list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-chip').textContent() === 'To reject', 'M3: and the list badge');
+await drawer.locator('.preh-decision').selectOption('Send back to author (via Managing Editor)');
+await page.waitForTimeout(300);
+check(await cockpit.locator('.preh-cockpit-status').inputValue() === 'Send back requested', 'M3: Send back decision sets status');
+await drawer.locator('.preh-decision').selectOption('Assign Editor');
+await page.waitForTimeout(300);
+check(await cockpit.locator('.preh-cockpit-status').inputValue() === 'Ready to assign', 'M3: Assign decision sets status');
+await drawer.locator('.preh-decision').selectOption('Reject and offer transfer');
 await drawer.locator('.preh-sendback').fill('Missing CRediT statement.');
 await drawer.locator('.preh-copy').click();
 await page.waitForTimeout(500);
@@ -255,6 +265,15 @@ await cockpit.locator('.preh-sendback').fill('Typed then Esc');
 await cockpit.locator('.preh-sendback').press('Escape');
 await page.waitForTimeout(300);
 check((await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001')))['ms:PR-D-26-00001'].sendBackNotes === 'Typed then Esc', 'M3: pending notes flushed on close');
+{
+  const lf = page.frame({ name: 'content' });
+  await lf.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-chip').click();
+  await lf.waitForSelector('.preh-popover');
+  const pop = lf.locator('.preh-popover');
+  check(await pop.locator('.preh-pop-field', { hasText: 'Decision (checklist)' }).locator('.preh-pop-ro').textContent() === 'Reject and offer transfer' &&
+    await pop.locator('.preh-pop-sendback').textContent() === 'Typed then Esc', 'M3: list popover shows decision and send back notes');
+  await pop.locator('.preh-pop-note').press('Escape');
+}
 // Messages from other frames are ignored
 await page.evaluate(() => window.postMessage({ type: 'preh:openCockpit', ms: 'PR-D-26-00001', similarityUrl: 'javascript:alert(1)' }, location.origin));
 await page.waitForTimeout(200);

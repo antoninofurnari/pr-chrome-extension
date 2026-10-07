@@ -15,7 +15,8 @@
     'In triage': 'In triage',
     'Waiting (reply)': 'Waiting',
     'Send back requested': 'Send back',
-    'Ready to assign': 'Ready',
+    'Ready to assign': 'To assign',
+    'Ready to reject': 'To reject',
     'Done': 'Done',
   };
   const STATUS_CLASS = {
@@ -24,6 +25,7 @@
     'Waiting (reply)': 'waiting',
     'Send back requested': 'sendback',
     'Ready to assign': 'ready',
+    'Ready to reject': 'reject',
     'Done': 'done',
   };
   const DAY = 86400000;
@@ -223,7 +225,14 @@
       l.append(el('span', null, text), control);
       return l;
     };
-    box.append(head, label('Status', select), label('Note', textarea), updated);
+    box.append(head, label('Status', select), label('Note', textarea));
+    // Filled in the cockpit checklist; shown here read-only.
+    const decision = rec.checklist && rec.checklist.decision;
+    if (decision) box.append(label('Decision (checklist)', el('div', 'preh-pop-ro', decision)));
+    if (rec.sendBackNotes && rec.sendBackNotes.trim()) {
+      box.append(label('Send back notes (checklist)', el('div', 'preh-pop-ro preh-pop-sendback', rec.sendBackNotes)));
+    }
+    box.append(updated);
     box.addEventListener('mousedown', (e) => e.stopPropagation());
     box.addEventListener('click', (e) => e.stopPropagation());
     document.body.append(box);

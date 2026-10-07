@@ -11,7 +11,7 @@
   const MS_PREFIX = 'ms:';
   const DEV_KEY = 'preh:dev';
 
-  const STATUSES = ['', 'In triage', 'Waiting (reply)', 'Send back requested', 'Ready to assign', 'Done'];
+  const STATUSES = ['', 'In triage', 'Waiting (reply)', 'Send back requested', 'Ready to assign', 'Ready to reject', 'Done'];
 
   function emptyRecord() {
     return { status: '', statusAt: null, note: '', updatedAt: null, checklist: {}, sendBackNotes: '' };

@@ -83,7 +83,8 @@ Antonino's operative workflow, in order. The checklist in the cockpit mirrors it
 ### F1. Notes and status on folder lists
 - On every EM folder list using the frozen grid (start with `NewAssignments.aspx`; make the selector logic generic), inject a small badge into each data row: a status chip and a note icon.
 - Click → inline popover with:
-  - **status**: `—`, `In triage`, `Waiting (reply)`, `Send back requested`, `Ready to assign`, `Done`;
+  - **status**: `—`, `In triage`, `Waiting (reply)`, `Send back requested`, `Ready to assign`, `Ready to reject`, `Done`;
+  - choosing a decision in the cockpit checklist sets the status (Reject → `Ready to reject`, Send back → `Send back requested`, Assign Editor → `Ready to assign`); the popover also shows the decision and send-back notes read-only;
   - **free-text note**, autosaved;
   - **last-updated date**.
 - Storage key: manuscript number (stable across folders). Value: `{status, note, updatedAt, checklist: {...}, sendBackNotes}`.
