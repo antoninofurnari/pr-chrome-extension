@@ -276,18 +276,43 @@
     const iAuthor = col(/^Author Similarity/i, 7);
     const iAbstract = col(/^Abstract Similarity/i, 8);
     const rows = [];
-    table.querySelectorAll('tr').forEach((tr) => {
+    // Only the table's own rows (not rows of nested tables) that carry a
+    // manuscript number: one per candidate.
+    gridRows(table).forEach((tr) => {
       const tds = tr.querySelectorAll(':scope > td');
       if (tds.length < 9) return;
       const msEl = tds[0].querySelector('span[id$="_SubPubNumberValue"]');
+      if (!msEl) return;
       rows.push({
-        ms: msEl ? cleanText(msEl) : '',
+        ms: cleanText(msEl),
         titleSim: parsePercent(tds[iTitle].textContent),
         authorSim: parsePercent(tds[iAuthor].textContent),
         abstractSim: parsePercent(tds[iAbstract].textContent),
       });
     });
     return rows;
+  }
+
+  function gridRows(table) {
+    return Array.from(table.querySelectorAll(':scope > tbody > tr, :scope > thead > tr, :scope > tr'));
+  }
+
+  // Counts only (no data), to compare a fetched copy of the Duplicate page
+  // with the rendered one.
+  function duplicatePageStats(doc) {
+    const table = doc.querySelector('table#gridResults');
+    if (!table) return null;
+    const direct = gridRows(table);
+    const msSpans = table.querySelectorAll('span[id$="_SubPubNumberValue"]');
+    return {
+      allTr: table.querySelectorAll('tr').length,
+      directTr: direct.length,
+      directWithMs: direct.filter((tr) => tr.querySelector('span[id$="_SubPubNumberValue"]')).length,
+      msSpans: msSpans.length,
+      distinctMs: new Set(Array.from(msSpans).map(cleanText)).size,
+      nestedTables: table.querySelectorAll('table').length,
+      hiddenRows: direct.filter((tr) => /display\s*:\s*none/i.test(tr.getAttribute('style') || '')).length,
+    };
   }
 
   // Step 2 rule: OK if EM score <= 50 and no title/abstract similarity > 70.
@@ -386,7 +411,7 @@
     EM_BASE, DUP_EM_SCORE_MAX, DUP_SIMILARITY_MAX,
     parseJsArgs, parseJsCall, parsePercent, isMsNumber, msRevision, absUrl,
     classifyActionLink, detectEvaluateWarning, parseActionRow, findGrid, parseGrid,
-    parseSimilarityPage, parseDuplicatePage, summarizeDuplicates,
+    parseSimilarityPage, parseDuplicatePage, duplicatePageStats, summarizeDuplicates,
     parseDetailsPage, splitRoles, onlyReviewEditing, parseAuthorStatusPage, parseFolders,
   };
 

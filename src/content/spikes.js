@@ -145,10 +145,12 @@
     openOverlay('Spike 2 — Duplicate Submission Check', r.actions.duplicateUrl, (iframe, same) => {
       if (!same) return log('  Spike 2: FAIL, iframe not same-origin');
       const n = P.parseDuplicatePage(iframe.contentDocument).length;
+      log('  Spike 2 iframe stats: ' + JSON.stringify(P.duplicatePageStats(iframe.contentDocument)));
       log(`  Spike 2: table#gridResults ${iframe.contentDocument.querySelector('table#gridResults') ? 'present' : 'MISSING'}, ${n} candidate rows parsed in iframe`);
     }, recordButtons('Spike 2'));
     try {
       const { status, doc } = await fetchDoc(r.actions.duplicateUrl);
+      log('  Spike 2 GET stats: ' + JSON.stringify(P.duplicatePageStats(doc)));
       const s = P.summarizeDuplicates(r.actions.duplicateScore, P.parseDuplicatePage(doc));
       log(`  Spike 2 GET: status=${status}; candidates=${s.candidates} emScore=${s.emScore} maxTitle=${s.maxTitle} maxAbstract=${s.maxAbstract} ok=${s.ok}`);
     } catch (e) { log('  Spike 2 GET failed: ' + e.message); }
