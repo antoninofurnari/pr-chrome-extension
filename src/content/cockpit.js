@@ -58,10 +58,14 @@
     return f;
   }
 
+  // Panel summaries can be mirrored in the checklist (node.mirror).
   function setSummary(node, text, level, title) {
-    node.textContent = text;
-    node.className = 'preh-sum preh-sum-' + (level || 'neutral');
-    node.title = title || '';
+    for (const n of [node, node.mirror]) {
+      if (!n) continue;
+      n.textContent = text;
+      n.className = 'preh-sum preh-sum-' + (level || 'neutral');
+      n.title = title || '';
+    }
   }
 
   // A collapsible panel of the right column.
@@ -128,6 +132,7 @@
 
   function duplicatePanel(d) {
     const p = panel('Duplicate Submission Check');
+    p.summary.dataset.key = 'dup';
     const url = emUrl(d.duplicateUrl);
     if (!url) {
       p.body.append(el('div', 'preh-pane-msg', 'No "Duplicate Submission Check" link on this row.'));
@@ -156,6 +161,7 @@
 
   function authorPanel(d) {
     const p = panel('Author Status');
+    p.summary.dataset.key = 'authors';
     const url = emUrl(d.detailsUrl);
     if (!url) {
       p.body.append(el('div', 'preh-pane-msg', 'No "Details" link on this row.'));
@@ -202,10 +208,138 @@
         p.body.append(f);
       },
     });
+    p.summary.dataset.key = 'evaluate';
     if (!url) p.body.append(el('div', 'preh-pane-msg', 'No "Evaluate Manuscript" link on this row.'));
     setSummary(p.summary, 'warning icon: ' + (d.evaluateWarning ? 'yes' : 'no'), d.evaluateWarning ? 'bad' : 'neutral',
       'Step 4 applies only when the warning icon is present. The icon markup is not confirmed yet (docs/em-structure.md §2).');
     return p.box;
+  }
+
+  // ---------------------------------------------------------------------------
+  // checklist (triage workflow, CLAUDE.md steps 0-5)
+  // ---------------------------------------------------------------------------
+
+  // [step title, summary key mirrored next to the step, [[id, text], ...]]
+  const CHECKLIST = [
+    ['0 · Before opening', null, [
+      ['s0_revision', 'Not a revision (R1, R2… → reassign to previous AE, no triage)'],
+      ['s0_coi', 'No conflict of interest (me → don\'t open; co-author, Catania colleague, team AE → return to EiC)'],
+    ]],
+    ['1 · Similarity report', null, [
+      ['s1_overlap', 'Overlap acceptable (long blocks, mosaic, others\' methods/results → Reject, ethics)'],
+      ['s1_scope', 'In scope, correct article type (else Reject + offer transfer)'],
+      ['s1_article', 'Looks like a scientific article: abstract, English, sections, length (else Reject, no transfer)'],
+      ['s1_skim', 'PDF skim: setup, results, no duplicated figures, no AI prompts, no tortured phrases, no citation stacking'],
+      ['s1_sections', 'Final sections: CRediT, competing interests, gen-AI disclosure (if used), ethics (data on people). Missing → send back'],
+    ]],
+    ['2 · Duplicate check', 'dup', [
+      ['s2_dup', 'EM score ≤ 50% and no title/abstract > 70%. Else Details of old MS → Editors: ME "Reject - invitation to resubmit" without reviewers = OK; same paper / under review → Reject (ethics)'],
+    ]],
+    ['3 · Author Status', 'authors', [
+      ['s3_names', 'Names and order match the PDF, emails plausible, affiliations consistent'],
+      ['s3_roles', 'Every author has a substantial role (only "Writing – review & editing" → send back). "No Response" is fine'],
+    ]],
+    ['4 · Evaluate Manuscript', 'evaluate', [
+      ['s4_eval', 'Only if warning icon: same paper + same authors → Reject (ethics); different authors → report to Publisher'],
+    ]],
+  ];
+  const DECISIONS = ['', 'Reject (Potential ethics concern)', 'Reject and offer transfer', 'Send back to author (via Managing Editor)', 'Assign Editor'];
+  const ITEM_COUNT = CHECKLIST.reduce((n, [, , items]) => n + items.length, 0);
+
+  function checklistDrawer(d, rec, right) {
+    const drawer = el('aside', 'preh-checklist');
+    const checklist = Object.assign({}, rec.checklist);
+    const save = () => S.update(d.ms, { checklist: Object.assign({}, checklist) });
+
+    const progress = el('span', 'preh-sum preh-sum-neutral');
+    const updateProgress = () => {
+      const done = CHECKLIST.reduce((n, [, , items]) => n + items.filter(([id]) => checklist[id]).length, 0);
+      progress.textContent = done + '/' + ITEM_COUNT;
+      progress.className = 'preh-sum preh-sum-' + (done === ITEM_COUNT ? 'ok' : 'neutral');
+    };
+    const head = el('div', 'preh-checklist-head');
+    head.append(el('strong', null, 'Checklist'), progress);
+    drawer.append(head);
+
+    for (const [title, key, items] of CHECKLIST) {
+      const step = el('div', 'preh-step');
+      const stepHead = el('div', 'preh-step-head');
+      stepHead.append(el('span', null, title));
+      const src = key && right.querySelector(`.preh-sum[data-key="${key}"]`);
+      if (src) {
+        const mirror = src.cloneNode(true);
+        src.mirror = mirror;
+        stepHead.append(mirror);
+      }
+      step.append(stepHead);
+      for (const [id, text] of items) {
+        const label = el('label', 'preh-check');
+        const box = el('input');
+        box.type = 'checkbox';
+        box.dataset.id = id;
+        box.checked = !!checklist[id];
+        box.addEventListener('change', () => {
+          checklist[id] = box.checked;
+          updateProgress();
+          save();
+        });
+        label.append(box, el('span', null, text));
+        step.append(label);
+      }
+      drawer.append(step);
+    }
+
+    // Step 5: intended decision (a note for Antonino, nothing is sent to EM).
+    const step5 = el('div', 'preh-step');
+    step5.append(el('div', 'preh-step-head', '5 · Decision'));
+    const decision = el('select', 'preh-decision');
+    for (const v of DECISIONS) {
+      const o = el('option', null, v || '—');
+      o.value = v;
+      if (v === (checklist.decision || '')) o.selected = true;
+      decision.append(o);
+    }
+    decision.addEventListener('change', () => {
+      checklist.decision = decision.value;
+      save();
+    });
+    step5.append(decision);
+    drawer.append(step5);
+
+    // Send back notes (autosaved) + Copy.
+    const notesHead = el('div', 'preh-step-head');
+    notesHead.append(el('span', null, 'Send back notes'));
+    const copy = el('button', 'preh-btn preh-copy', 'Copy');
+    copy.type = 'button';
+    notesHead.append(copy);
+    const notes = el('textarea', 'preh-sendback');
+    notes.rows = 6;
+    notes.placeholder = 'Items to send back to the authors…';
+    notes.value = rec.sendBackNotes || '';
+    let pending = null;
+    let lastSaved = notes.value;
+    const saveNotes = () => {
+      clearTimeout(pending);
+      if (notes.value === lastSaved) return;
+      lastSaved = notes.value;
+      S.update(d.ms, { sendBackNotes: notes.value });
+    };
+    notes.addEventListener('input', () => { clearTimeout(pending); pending = setTimeout(saveNotes, 400); });
+    notes.addEventListener('blur', saveNotes);
+    copy.addEventListener('click', () => {
+      saveNotes();
+      const done = () => { copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1200); };
+      navigator.clipboard.writeText(notes.value).then(done, () => {
+        notes.select();
+        if (document.execCommand('copy')) done();
+      });
+    });
+    const notesBox = el('div', 'preh-step');
+    notesBox.append(notesHead, notes);
+    drawer.append(notesBox);
+
+    updateProgress();
+    return { drawer, flush: saveNotes };
   }
 
   // Draggable divider between the left pane and the panels. The width (in %
@@ -257,6 +391,7 @@
 
   function close() {
     if (!cockpit) return;
+    cockpit.flush(); // pending send-back notes
     cockpit.unsubscribe();
     cockpit.el.remove();
     cockpit = null;
@@ -304,13 +439,18 @@
     right.append(duplicatePanel(d), authorPanel(d), evaluatePanel(d));
     const main = el('div', 'preh-cockpit-main');
     const divider = splitter(main, sim.pane);
-    main.append(sim.pane, divider, right);
+    const list = checklistDrawer(d, rec, right);
+    main.append(sim.pane, divider, right, list.drawer);
+    const toggleList = button('Checklist', 'preh-on', () => {
+      const hidden = main.classList.toggle('preh-no-checklist');
+      toggleList.classList.toggle('preh-on', !hidden);
+    }, 'Show or hide the checklist');
 
     const maximize = button('Maximize report', '', () => {
       const on = main.classList.toggle('preh-maximized');
       maximize.textContent = on ? 'Show panels' : 'Maximize report';
     }, 'Hide the panels on the right (temporary)');
-    head.append(spacer, el('label', 'preh-cockpit-meta', 'Status '), status, maximize,
+    head.append(spacer, el('label', 'preh-cockpit-meta', 'Status '), status, toggleList, maximize,
       button('Open report (left half)', '', sim.openLeftHalf, 'Open the similarity report in a window on the left half of the screen'),
       button('Close (Esc)', '', close));
 
@@ -331,7 +471,7 @@
       if (c && c.newValue && c.newValue.status !== status.value) status.value = c.newValue.status || '';
     };
     chrome.storage.onChanged.addListener(onChange);
-    cockpit = { el: box, ms: d.ms, unsubscribe: () => chrome.storage.onChanged.removeListener(onChange) };
+    cockpit = { el: box, ms: d.ms, flush: list.flush, unsubscribe: () => chrome.storage.onChanged.removeListener(onChange) };
   }
 
   function init() {

@@ -41,6 +41,7 @@ const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'preh-e2e-'));
 const ctx = await chromium.launchPersistentContext(userDataDir, {
   channel: 'chromium',
   headless: true,
+  permissions: ['clipboard-read', 'clipboard-write'],
   args: [`--disable-extensions-except=${ROOT}`, `--load-extension=${ROOT}`],
 });
 
@@ -187,10 +188,35 @@ check((await sw.evaluate(() => chrome.storage.local.get('preh:leftWidth')))['pre
 // Maximize hides the panels without reloading them.
 await page.frame({ name: 'preh-duplicate' }).evaluate(() => { window.__keep = 1; });
 await cockpit.locator('button', { hasText: 'Maximize report' }).click();
-check(await leftPct() === 100 && !(await cockpit.locator('.preh-right').isVisible()), 'maximize: left pane takes the full width');
+check(!(await cockpit.locator('.preh-right').isVisible()) && await page.evaluate(() => {
+  const m = document.querySelector('.preh-cockpit-main').getBoundingClientRect().width;
+  const l = document.querySelector('.preh-left').getBoundingClientRect().width;
+  const c = document.querySelector('.preh-checklist').getBoundingClientRect().width;
+  return Math.abs(m - l - c) < 2;
+}), 'maximize: left pane takes all the width next to the checklist');
 await cockpit.locator('button', { hasText: 'Show panels' }).click();
 check(await leftPct() === 70 && await cockpit.locator('.preh-right').isVisible(), 'maximize: Show panels restores the layout');
 check(await page.frame({ name: 'preh-duplicate' }).evaluate(() => window.__keep) === 1, 'maximize: panels not reloaded');
+// ---- M3: checklist ----
+const drawer = cockpit.locator('.preh-checklist');
+check(await drawer.locator('input[type=checkbox]').count() === 11, 'M3: 11 checklist items');
+check(await drawer.locator('.preh-step', { hasText: '2 · Duplicate check' }).locator('.preh-sum').textContent() === 'EM 35% · title 82% · abstract 71% · 2 > 70%', 'M3: duplicate summary mirrored next to step 2');
+check(await drawer.locator('.preh-step', { hasText: '3 · Author Status' }).locator('.preh-sum').textContent() === '4 authors · 1 only review & editing · 1 without roles', 'M3: author summary mirrored next to step 3');
+await drawer.locator('input[data-id="s1_overlap"]').check();
+await drawer.locator('input[data-id="s2_dup"]').check();
+await drawer.locator('.preh-decision').selectOption('Reject and offer transfer');
+await drawer.locator('.preh-sendback').fill('Missing CRediT statement.');
+await drawer.locator('.preh-copy').click();
+await page.waitForTimeout(500);
+check(await page.evaluate(() => navigator.clipboard.readText()) === 'Missing CRediT statement.', 'M3: Copy puts send-back notes on the clipboard');
+check(await drawer.locator('.preh-checklist-head .preh-sum').textContent() === '2/11', 'M3: progress counter');
+const rec3 = (await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001')))['ms:PR-D-26-00001'];
+check(rec3.checklist.s1_overlap === true && rec3.checklist.s2_dup === true && rec3.checklist.decision === 'Reject and offer transfer' &&
+  rec3.sendBackNotes === 'Missing CRediT statement.' && rec3.note === 'synthetic note', 'M3: checklist, decision and notes saved (note kept)');
+await cockpit.locator('button', { hasText: 'Checklist' }).click();
+check(!(await drawer.isVisible()), 'M3: Checklist button hides the drawer');
+await cockpit.locator('button', { hasText: 'Checklist' }).click();
+check(await drawer.isVisible(), 'M3: and shows it again');
 // Status in header -> list badge
 await cockpit.locator('.preh-cockpit-status').selectOption('In triage');
 await page.waitForTimeout(300);
@@ -217,6 +243,18 @@ await cockpit.locator('button', { hasText: 'Open Decision page' }).click();
 await page.waitForTimeout(500);
 check(await cockpit.count() === 0, 'M2: Open Decision page closes the cockpit');
 check(page.frame({ name: 'content' }).url().includes('/pr/EditorDecision.aspx?docid=100002'), 'M2: iframe#content navigated to EditorDecision.aspx');
+// Checklist state comes back when the cockpit is reopened
+await page.frame({ name: 'content' }).goto('https://www.editorialmanager.com/pr/NewAssignments.aspx');
+await page.frame({ name: 'content' }).locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-triage-btn').click();
+await cockpit.waitFor();
+check(await cockpit.locator('input[data-id="s1_overlap"]').isChecked() && !(await cockpit.locator('input[data-id="s1_scope"]').isChecked()) &&
+  await cockpit.locator('.preh-decision').inputValue() === 'Reject and offer transfer' &&
+  await cockpit.locator('.preh-sendback').inputValue() === 'Missing CRediT statement.', 'M3: checklist restored on reopen');
+// Notes typed right before closing are not lost
+await cockpit.locator('.preh-sendback').fill('Typed then Esc');
+await cockpit.locator('.preh-sendback').press('Escape');
+await page.waitForTimeout(300);
+check((await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001')))['ms:PR-D-26-00001'].sendBackNotes === 'Typed then Esc', 'M3: pending notes flushed on close');
 // Messages from other frames are ignored
 await page.evaluate(() => window.postMessage({ type: 'preh:openCockpit', ms: 'PR-D-26-00001', similarityUrl: 'javascript:alert(1)' }, location.origin));
 await page.waitForTimeout(200);
