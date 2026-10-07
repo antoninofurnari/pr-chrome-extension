@@ -145,6 +145,7 @@ test/
 ## Development loop and hot reload
 
 - Load the repository folder as an unpacked extension (chrome://extensions → Developer mode → Load unpacked).
+- `manifest.json` has a public `key` so the extension ID (and therefore `chrome.storage.local`) stays the same when the folder moves. Never remove or change it: that would orphan all of Antonino's notes. (Only the public key is in the repo; no private key exists or is needed for an unpacked extension.)
 - **Dev hot reload (Milestone 0 deliverable).** In dev mode (a flag in `chrome.storage.local`, toggled from the popup):
   - the service worker polls `chrome.runtime.getURL('dev-stamp.txt')` every ~1.5 s;
   - when the content changes, it calls `chrome.runtime.reload()` and then reloads EM tabs (`chrome.tabs.reload` for tabs matching the host).
