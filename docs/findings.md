@@ -64,3 +64,8 @@ Still unknown (docs/em-structure.md §2). `detectEvaluateWarning()` reports any
 row and prints the icon markup to the DevTools console only (not to the log).
 When a flagged manuscript appears, copy that markup (sanitized) into
 `docs/em-structure.md`.
+
+### Turnitin viewer inside the cockpit
+The sources sidebar of the Turnitin viewer collapses by clicking the active
+"Overall Similarity" item in its right rail (Turnitin's own UI). The extension
+can't style Turnitin (different origin, no host permission), and doesn't need to.
