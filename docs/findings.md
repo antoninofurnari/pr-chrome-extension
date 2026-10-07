@@ -1,5 +1,7 @@
 # M0 findings
 
+**M0 closed on 2026-10-07**: all spikes pass on the live site.
+
 Status of the Milestone 0 spikes (CLAUDE.md). "Local" = verified with
 `test/e2e/smoke.mjs` (unpacked extension in Chromium, EM replaced by the
 synthetic fixtures in `test/fixtures/`). "Live" = must be confirmed by
@@ -9,10 +11,10 @@ spikes" in the bottom-right corner of EM → "Copy log").
 | # | Spike | Local | Live |
 |---|---|---|---|
 | 1 | Extension loads; hot reload | Stamp change detected in ~1.5 s, `chrome.runtime.reload()` called. Chrome serves the updated `dev-stamp.txt` without caching. Tab reload not verifiable under Playwright (see below). | **OK** (2026-10-07): loads, hot reload works end to end with Load unpacked. |
-| 2 | Iframe of `DuplicateSubmissionCheckResults.aspx` from the top window | Renders, same-origin, table readable from the parent. GET + DOMParser summary works. | **OK**, renders. Slow: ~15 s for a page with several hundred candidates. GET and iframe gave different row counts (387 vs 476): see below. |
+| 2 | Iframe of `DuplicateSubmissionCheckResults.aspx` from the top window | Renders, same-origin, table readable from the parent. GET + DOMParser summary works. | **OK**, renders. Slow: ~15 s for a page with several hundred candidates. EM repeats candidate rows: count distinct manuscripts (see below). |
 | 3 | Iframe of `CrossCheckResults.aspx` → Turnitin | Redirect is followed inside the iframe (fake Turnitin page renders). | **OK: Turnitin renders inside the iframe.** The left-half popup fallback also works but is not needed. |
 | 4 | Iframe of `ViewEvaluateManuscript.aspx` incl. inner `mfe-ux` iframe | Wrapper renders, `#iframe_msa` found. | **OK**, inner `mfe-ux` panel renders. |
-| 5 | Open Assign Editor from an extension button | **Click dispatch does not work** (see below). MAIN-world bridge calls `editorAssignment(...)` correctly. | 5a: nothing opens (as expected). **5b: works**, but EM's page opens in a new tab instead of a popup window (see below). |
+| 5 | Open Assign Editor from an extension button | **Click dispatch does not work** (see below). MAIN-world bridge calls `editorAssignment(...)` correctly. | 5a: nothing opens (as expected). **5b: works** (opens in a new tab, same as EM's own link). |
 
 ## Details
 
@@ -34,9 +36,11 @@ spikes" in the bottom-right corner of EM → "Copy log").
   the rendered iframe 476. The parser then took every `tr` with ≥ 9 cells,
   including rows of nested tables. It now only takes the table's direct rows
   that carry a `span[id$="_SubPubNumberValue"]`.
-- The spike logs `duplicatePageStats()` (counts only) for both copies, to tell
-  whether the two copies differ (EM scripts or server) or it was only nested
-  rows. Re-run spike 2 on the same manuscript and compare the two lines.
+- Second live run (same manuscript): iframe 325 rows, GET 476 rows, both
+  **238 distinct** manuscript numbers, no nested tables, no hidden rows. So EM
+  repeats candidate rows a varying number of times per request (387 / 476 /
+  325 across three loads). Maxima are unaffected; `summarizeDuplicates()` now
+  counts and flags distinct manuscripts.
 - Load time ~15 s: the cockpit should start the GET as soon as it opens and
   show the summary badge while the iframe is still loading.
 
@@ -49,11 +53,8 @@ spikes" in the bottom-right corner of EM → "Copy log").
   world validates the 7 arguments (parsed from the row's `a.assignEditor` href)
   and calls `window.editorAssignment(...)` in the top window, which only opens
   EM's popup.
-- Live: 5a opens nothing; 5b opens EM's Assign Editor page, but **in a new tab**,
-  not in a popup window. Open question: does EM's own "Assign Editor" link
-  open a tab too on Antonino's Chrome? If yes, nothing to fix. If not, the
-  difference comes from calling it through the bridge (e.g. the window
-  features computed by `openCenterWinPct` from the top window).
+- Live: 5a opens nothing; 5b opens EM's Assign Editor page in a new tab, which
+  is also what EM's own link does on Antonino's Chrome. Nothing to fix.
 
 ### Evaluate Manuscript warning icon
 Still unknown (docs/em-structure.md §2). `detectEvaluateWarning()` reports any

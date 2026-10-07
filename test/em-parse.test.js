@@ -69,3 +69,15 @@ test('roles', () => {
   assert.equal(P.onlyReviewEditing(['Software', 'Writing – review & editing']), false);
   assert.equal(P.onlyReviewEditing([]), false);
 });
+
+test('summarizeDuplicates: repeated candidates count once', () => {
+  const rows = [
+    { ms: 'a', titleSim: 90, abstractSim: 10 },
+    { ms: 'a', titleSim: 90, abstractSim: 10 },
+    { ms: 'b', titleSim: 5, abstractSim: 5 },
+  ];
+  const s = P.summarizeDuplicates(20, rows);
+  assert.equal(s.candidates, 2);
+  assert.deepEqual(s.flagged, ['a']);
+  assert.equal(s.maxTitle, 90);
+});

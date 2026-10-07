@@ -320,16 +320,18 @@
     const max = (k) => rows.reduce((m, r) => (r[k] != null && r[k] > m ? r[k] : m), 0);
     const maxTitle = max('titleSim');
     const maxAbstract = max('abstractSim');
-    const flagged = rows.filter((r) =>
+    // EM repeats candidates (a varying number of times per request), so
+    // count and flag distinct manuscripts.
+    const flagged = new Set(rows.filter((r) =>
       (r.titleSim != null && r.titleSim > DUP_SIMILARITY_MAX) ||
-      (r.abstractSim != null && r.abstractSim > DUP_SIMILARITY_MAX));
+      (r.abstractSim != null && r.abstractSim > DUP_SIMILARITY_MAX)).map((r) => r.ms));
     const scoreOk = emScore == null ? null : emScore <= DUP_EM_SCORE_MAX;
     return {
       emScore,
       maxTitle,
       maxAbstract,
-      candidates: rows.length,
-      flagged: flagged.map((r) => r.ms),
+      candidates: new Set(rows.map((r) => r.ms)).size,
+      flagged: Array.from(flagged),
       ok: scoreOk !== false && flagged.length === 0,
       unknownScore: emScore == null,
     };
