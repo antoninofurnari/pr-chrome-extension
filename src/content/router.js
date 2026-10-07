@@ -26,5 +26,5 @@
   if (ctx === 'top') {
     PREH.storage.isDev().then((dev) => { if (dev) PREH.spikes.init(); });
   }
-  // 'content': folder lists (F1, Milestone 1).
+  if (ctx === 'content') PREH.list.init();
 })();

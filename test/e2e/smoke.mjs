@@ -84,6 +84,7 @@ await page.click('text=Read list');
 let log = await logText();
 check(/Frozen grid: found; 2 rows/.test(log), 'list parsed (2 rows)');
 check(!/PR-D-/.test(log), 'log contains no manuscript numbers');
+check(!/UNRECOGNISED/.test(log), 'manuscript numbers still parsed with badges injected');
 
 await page.click('text=2 · Duplicate');
 await page.waitForFunction(() => /Spike 2 GET/.test(document.querySelector('.preh-log').value) && /candidate rows parsed/.test(document.querySelector('.preh-log').value));
@@ -120,6 +121,63 @@ await page.click('text=Authors');
 await page.waitForFunction(() => /authors=\d/.test(document.querySelector('.preh-log').value));
 check(/authors=4; onlyReviewEditing=1; noRoles=1/.test(await logText()), 'author status parsed');
 await page.keyboard.press('Escape');
+
+// ---- M1: badges and popover on the list ----
+const list = page.frame({ name: 'content' });
+await list.waitForSelector('.preh-badge');
+check(await list.locator('.preh-badge').count() === 2, 'M1: one badge per row');
+check(await page.locator('.preh-badge').count() === 0, 'M1: no badge in the top window');
+await list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-chip').click();
+await list.waitForSelector('.preh-popover');
+await list.selectOption('.preh-pop-status', 'Waiting (reply)');
+await list.fill('.preh-pop-note', 'synthetic note');
+await page.waitForTimeout(600);
+await list.locator('.preh-pop-note').press('Escape');
+check(await list.locator('.preh-popover').count() === 0, 'M1: Esc closes the popover');
+const chip1 = list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-chip');
+check(await chip1.textContent() === 'Waiting · 0d', 'M1: chip shows Waiting · 0d');
+check(await list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-note-icon.preh-has-note').count() === 1, 'M1: note icon marked');
+const stored = await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001'));
+const rec = stored['ms:PR-D-26-00001'];
+check(rec && rec.status === 'Waiting (reply)' && rec.note === 'synthetic note' && !!rec.statusAt, 'M1: record saved under ms:<number>');
+await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001').then((r) => {
+  const v = r['ms:PR-D-26-00001'];
+  v.statusAt = new Date(Date.now() - 4 * 86400000 - 1000).toISOString();
+  return chrome.storage.local.set({ 'ms:PR-D-26-00001': v });
+}));
+await page.waitForTimeout(300);
+check(await chip1.textContent() === 'Waiting · 4d', 'M1: waiting age in days (live update from storage)');
+// Toggle: clicking the same badge twice closes the popover.
+await list.locator('.preh-badge[data-ms="PR-D-26-00002R1"] .preh-chip').click();
+await list.waitForSelector('.preh-popover');
+await list.locator('.preh-badge[data-ms="PR-D-26-00002R1"] .preh-chip').click();
+await page.waitForTimeout(200);
+check(await list.locator('.preh-popover').count() === 0, 'M1: second click on the badge closes the popover');
+// Survives a reload of iframe#content.
+await list.goto('https://www.editorialmanager.com/pr/NewAssignments.aspx');
+await list.waitForSelector('.preh-badge');
+await page.waitForTimeout(300);
+check(await list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-chip').textContent() === 'Waiting · 4d', 'M1: state persists after iframe reload');
+check(await list.locator('.preh-badge').count() === 2, 'M1: no duplicate badges after reload');
+
+// ---- F3: export / import from the popup page ----
+const extId = new URL(sw.url()).host;
+const popup = await ctx.newPage();
+await popup.goto(`chrome-extension://${extId}/src/popup/popup.html?tab=1`);
+await popup.waitForFunction(() => document.getElementById('count').textContent === '1');
+check(true, 'F3: popup counts 1 record');
+const [download] = await Promise.all([popup.waitForEvent('download'), popup.click('#export')]);
+const exported = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+check(exported.format === 'preh-notes-v1' && exported.records['PR-D-26-00001'].note === 'synthetic note', 'F3: export contains the record');
+exported.records['PR-D-26-00002R1'] = { status: 'Done', note: 'imported', updatedAt: new Date().toISOString() };
+const importFile = path.join(userDataDir, 'import.json');
+fs.writeFileSync(importFile, JSON.stringify(exported));
+await popup.setInputFiles('#file', importFile);
+await popup.waitForFunction(() => /Imported/.test(document.getElementById('msg').textContent));
+check(/Imported 1 records/.test(await popup.textContent('#msg')), 'F3: import writes only newer/missing records');
+await popup.close();
+await page.waitForTimeout(300);
+check(await list.locator('.preh-badge[data-ms="PR-D-26-00002R1"] .preh-chip').textContent() === 'Done', 'F3: imported status shown on the list');
 
 check(/Build stamp: \d+/.test(await logText()), 'build stamp readable via service worker');
 

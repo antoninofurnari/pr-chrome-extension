@@ -201,6 +201,21 @@
     return res;
   }
 
+  // Manuscript number = text of the first data cell, ignoring anything the
+  // extension injected there (elements with a preh- class).
+  function msFromCell(td) {
+    if (!td) return '';
+    let text = '';
+    const walk = (node) => {
+      for (const c of node.childNodes) {
+        if (c.nodeType === 3) text += c.nodeValue;
+        else if (c.nodeType === 1 && !/(^|\s)preh-/.test(c.getAttribute('class') || '')) walk(c);
+      }
+    };
+    walk(td);
+    return text.replace(/\s+/g, ' ').trim();
+  }
+
   // Find the frozen grid in a folder list document.
   // Returns null if this page has no frozen grid.
   function findGrid(doc) {
@@ -222,8 +237,7 @@
     grid.dataTable.querySelectorAll('tr[data-rowindex]').forEach((dataRow) => {
       const idx = dataRow.getAttribute('data-rowindex');
       const actionRow = actionRows[idx] || null;
-      const firstCell = dataRow.querySelector('td');
-      const ms = cleanText(firstCell);
+      const ms = msFromCell(dataRow.querySelector('td'));
       rows.push({
         rowIndex: idx,
         docId: dataRow.getAttribute('data-identity'),
@@ -412,7 +426,7 @@
   const api = {
     EM_BASE, DUP_EM_SCORE_MAX, DUP_SIMILARITY_MAX,
     parseJsArgs, parseJsCall, parsePercent, isMsNumber, msRevision, absUrl,
-    classifyActionLink, detectEvaluateWarning, parseActionRow, findGrid, parseGrid,
+    classifyActionLink, detectEvaluateWarning, parseActionRow, msFromCell, findGrid, parseGrid,
     parseSimilarityPage, parseDuplicatePage, duplicatePageStats, summarizeDuplicates,
     parseDetailsPage, splitRoles, onlyReviewEditing, parseAuthorStatusPage, parseFolders,
   };

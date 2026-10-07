@@ -2,7 +2,8 @@
 // Classic script (shared by content scripts and the popup): exposes PREH.storage.
 //
 // Per-manuscript records live under "ms:<manuscript number>":
-//   {status, note, updatedAt, checklist: {...}, sendBackNotes}
+//   {status, statusAt, note, updatedAt, checklist: {...}, sendBackNotes}
+// statusAt = when the status last changed (for "Waiting · 4d").
 // Extension settings live under "preh:<name>".
 (function (root) {
   'use strict';
@@ -13,7 +14,7 @@
   const STATUSES = ['', 'In triage', 'Waiting (reply)', 'Send back requested', 'Ready to assign', 'Done'];
 
   function emptyRecord() {
-    return { status: '', note: '', updatedAt: null, checklist: {}, sendBackNotes: '' };
+    return { status: '', statusAt: null, note: '', updatedAt: null, checklist: {}, sendBackNotes: '' };
   }
 
   async function get(ms) {
@@ -22,11 +23,26 @@
     return Object.assign(emptyRecord(), res[key] || {});
   }
 
-  // Shallow-merge `patch` into the record and bump updatedAt.
-  async function update(ms, patch) {
-    const rec = Object.assign(await get(ms), patch, { updatedAt: new Date().toISOString() });
-    await chrome.storage.local.set({ [MS_PREFIX + ms]: rec });
-    return rec;
+  // Shallow-merge `patch` into the record and bump updatedAt. Writes are
+  // chained so two quick updates (status, then note) don't overwrite each other.
+  let queue = Promise.resolve();
+  function update(ms, patch) {
+    const run = async () => {
+      const rec = Object.assign(await get(ms), patch, { updatedAt: new Date().toISOString() });
+      await chrome.storage.local.set({ [MS_PREFIX + ms]: rec });
+      return rec;
+    };
+    const p = queue.then(run, run);
+    queue = p.catch(() => {});
+    return p;
+  }
+
+  // Several records at once: {ms: record} (empty records for unknown ms).
+  async function getMany(list) {
+    const res = await chrome.storage.local.get(list.map((ms) => MS_PREFIX + ms));
+    const out = {};
+    for (const ms of list) out[ms] = Object.assign(emptyRecord(), res[MS_PREFIX + ms] || {});
+    return out;
   }
 
   // All manuscript records as {ms: record}.
@@ -72,5 +88,5 @@
   }
 
   root.PREH = root.PREH || {};
-  root.PREH.storage = { STATUSES, MS_PREFIX, DEV_KEY, emptyRecord, get, update, all, exportAll, importAll, isDev, setDev };
+  root.PREH.storage = { STATUSES, MS_PREFIX, DEV_KEY, emptyRecord, get, getMany, update, all, exportAll, importAll, isDev, setDev };
 })(globalThis);
