@@ -168,6 +168,29 @@ await page.waitForFunction(() => { try { return !!document.querySelector('iframe
 check(true, 'M2: Evaluate loads on expand (with inner iframe)');
 // No content-script UI inside the cockpit's own iframes
 check(await page.frame({ name: 'preh-duplicate' }).locator('.preh-badge, .preh-cockpit').count() === 0, 'M2: no extension UI inside panel iframes');
+// Resizable left pane: drag the divider to ~70%, width is remembered.
+const leftPct = () => page.evaluate(() => {
+  const m = document.querySelector('.preh-cockpit-main').getBoundingClientRect();
+  return Math.round(document.querySelector('.preh-left').getBoundingClientRect().width / m.width * 100);
+});
+check(await leftPct() === 55, 'resize: default left width 55%');
+const mainBox = await cockpit.locator('.preh-cockpit-main').boundingBox();
+const bar = await cockpit.locator('.preh-splitter').boundingBox();
+await page.mouse.move(bar.x + 3, bar.y + bar.height / 2);
+await page.mouse.down();
+await page.mouse.move(mainBox.x + mainBox.width * 0.5, bar.y + 100, { steps: 3 }); // passes over iframes
+await page.mouse.move(mainBox.x + mainBox.width * 0.7, bar.y + 100, { steps: 5 });
+await page.mouse.up();
+const dragged = await leftPct();
+check(dragged >= 69 && dragged <= 71, `resize: drag sets left width (~70%, got ${dragged}%)`);
+check((await sw.evaluate(() => chrome.storage.local.get('preh:leftWidth')))['preh:leftWidth'] === 70, 'resize: width saved');
+// Maximize hides the panels without reloading them.
+await page.frame({ name: 'preh-duplicate' }).evaluate(() => { window.__keep = 1; });
+await cockpit.locator('button', { hasText: 'Maximize report' }).click();
+check(await leftPct() === 100 && !(await cockpit.locator('.preh-right').isVisible()), 'maximize: left pane takes the full width');
+await cockpit.locator('button', { hasText: 'Show panels' }).click();
+check(await leftPct() === 70 && await cockpit.locator('.preh-right').isVisible(), 'maximize: Show panels restores the layout');
+check(await page.frame({ name: 'preh-duplicate' }).evaluate(() => window.__keep) === 1, 'maximize: panels not reloaded');
 // Status in header -> list badge
 await cockpit.locator('.preh-cockpit-status').selectOption('In triage');
 await page.waitForTimeout(300);
@@ -185,6 +208,9 @@ check(await list.locator('.preh-badge').count() === 2, 'M2: list unchanged after
 await list.locator('.preh-badge[data-ms="PR-D-26-00002R1"] .preh-triage-btn').click();
 await cockpit.waitFor();
 check(await cockpit.locator('.preh-cockpit-bar', { hasText: 'Revision R1' }).count() === 1, 'M2: revision hint for R1');
+check(await leftPct() === 70, 'resize: width remembered in the next cockpit');
+await cockpit.locator('.preh-splitter').dblclick();
+check(await leftPct() === 55, 'resize: double-click resets to 55%');
 check(await sum('Evaluate').textContent() === 'warning icon: yes', 'M2: evaluate warning detected on row 2');
 // Decision: navigates iframe#content and closes the cockpit
 await cockpit.locator('button', { hasText: 'Open Decision page' }).click();

@@ -208,6 +208,45 @@
     return p.box;
   }
 
+  // Draggable divider between the left pane and the panels. The width (in %
+  // of the cockpit) is remembered across cockpits; double-click resets it.
+  const WIDTH_KEY = 'preh:leftWidth';
+  const DEFAULT_WIDTH = 55;
+
+  function splitter(main, left) {
+    const bar = el('div', 'preh-splitter');
+    bar.title = 'Drag to resize · double-click to reset';
+    const apply = (pct) => { left.style.flexBasis = pct + '%'; };
+    chrome.storage.local.get(WIDTH_KEY).then((r) => apply(r[WIDTH_KEY] || DEFAULT_WIDTH));
+
+    bar.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      bar.setPointerCapture(e.pointerId);
+      main.classList.add('preh-dragging'); // iframes ignore the pointer while dragging
+      const box = main.getBoundingClientRect();
+      let pct = null;
+      const move = (ev) => {
+        pct = Math.round(Math.min(85, Math.max(20, ((ev.clientX - box.left) / box.width) * 100)));
+        apply(pct);
+      };
+      const up = () => {
+        bar.removeEventListener('pointermove', move);
+        bar.removeEventListener('pointerup', up);
+        bar.removeEventListener('pointercancel', up);
+        main.classList.remove('preh-dragging');
+        if (pct != null) chrome.storage.local.set({ [WIDTH_KEY]: pct });
+      };
+      bar.addEventListener('pointermove', move);
+      bar.addEventListener('pointerup', up);
+      bar.addEventListener('pointercancel', up);
+    });
+    bar.addEventListener('dblclick', () => {
+      apply(DEFAULT_WIDTH);
+      chrome.storage.local.remove(WIDTH_KEY);
+    });
+    return bar;
+  }
+
   // ---------------------------------------------------------------------------
   // open / close
   // ---------------------------------------------------------------------------
@@ -259,15 +298,21 @@
     status.addEventListener('change', () => S.update(d.ms, { status: status.value, statusAt: new Date().toISOString() }));
     const spacer = el('span', 'preh-spacer');
     const sim = similarityPane(d);
-    head.append(spacer, el('label', 'preh-cockpit-meta', 'Status '), status,
-      button('Open report (left half)', '', sim.openLeftHalf, 'Open the similarity report in a window on the left half of the screen'),
-      button('Close (Esc)', '', close));
 
     // body
     const right = el('div', 'preh-right');
     right.append(duplicatePanel(d), authorPanel(d), evaluatePanel(d));
     const main = el('div', 'preh-cockpit-main');
-    main.append(sim.pane, right);
+    const divider = splitter(main, sim.pane);
+    main.append(sim.pane, divider, right);
+
+    const maximize = button('Maximize report', '', () => {
+      const on = main.classList.toggle('preh-maximized');
+      maximize.textContent = on ? 'Show panels' : 'Maximize report';
+    }, 'Hide the panels on the right (temporary)');
+    head.append(spacer, el('label', 'preh-cockpit-meta', 'Status '), status, maximize,
+      button('Open report (left half)', '', sim.openLeftHalf, 'Open the similarity report in a window on the left half of the screen'),
+      button('Close (Esc)', '', close));
 
     // footer
     const foot = el('div', 'preh-cockpit-foot');
