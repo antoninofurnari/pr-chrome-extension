@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<!-- Synthetic fixture modelled on docs/em-structure.md §3.2. No real data. -->
+<html><head><meta charset="utf-8"><title>Duplicate Submission Check</title></head><body>
+<form id="form1" action="DuplicateSubmissionCheckResults.aspx?docID=100001">
+<h2>Duplicate Submission Check Results - DATE</h2><h3>Potential Duplicate Submissions</h3>
+<table id="gridResults" class="datatable">
+<tr valign="bottom"><th>Manuscript/Submission Number</th><th>Initial Date Submitted</th><th>Revision</th><th>Current Status</th><th>Article Title</th><th>Authors</th><th>Article Title Similarity</th><th>Author Similarity</th><th>Abstract Similarity</th></tr>
+<tr align="left"><td><div style="white-space:nowrap"><span id="gridResults_ctl02_SubPubNumberValue">PR-D-25-00010</span><br>
+  <a href="javascript:viewAuthorPDFs(1, 'a', 0, 'b');">View Submission</a>
+  <a style="display:inline-block" href="javascript:popupDetailsWindow(200010, 'PR-D-25-00010', '42')">Details</a><span id="flags200010"></span></div></td>
+  <td>1/1/2025 10:00:00 AM</td><td><span id="gridResults_ctl02_RevisionValue">0</span></td><td><span id="gridResults_ctl02_CurrentStatusValue">TXT</span></td>
+  <td style="width:20%;">TITLE</td><td style="width:20%;">NAME</td>
+  <td><span class="redtextBold">82%</span><br><div style="float:left;height:8px;width:50px;border:1px solid"><div style="float:left;height:8px;width:82%;background-color:red"></div></div></td>
+  <td><span>40%</span><br><div><div style="background-color:green"></div></div></td>
+  <td><span>30%</span><br><div><div style="background-color:green"></div></div></td>
+</tr>
+<tr class="altrow" align="left"><td><div style="white-space:nowrap"><span id="gridResults_ctl03_SubPubNumberValue">PR-D-24-00020</span><br></div></td>
+  <td>1/1/2024 10:00:00 AM</td><td><span id="gridResults_ctl03_RevisionValue">1</span></td><td><span id="gridResults_ctl03_CurrentStatusValue">TXT</span></td>
+  <td style="width:20%;">TITLE</td><td style="width:20%;">NAME</td>
+  <td><span>12%</span><br><div></div></td>
+  <td><span>5%</span><br><div></div></td>
+  <td><span class="redtextBold">71%</span><br><div></div></td>
+</tr>
+<tr align="left"><td><div style="white-space:nowrap"><span id="gridResults_ctl04_SubPubNumberValue">PR-D-23-00030</span><br></div></td>
+  <td>1/1/2023 10:00:00 AM</td><td><span id="gridResults_ctl04_RevisionValue">0</span></td><td><span id="gridResults_ctl04_CurrentStatusValue">TXT</span></td>
+  <td style="width:20%;">TITLE</td><td style="width:20%;">NAME</td>
+  <td><span>70%</span><br><div></div></td>
+  <td><span>0%</span><br><div></div></td>
+  <td><span>10%</span><br><div></div></td>
+</tr>
+</table></form></body></html>

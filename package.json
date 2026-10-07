@@ -1,0 +1,8 @@
+{
+  "name": "pr-em-helper",
+  "private": true,
+  "description": "Chrome extension for triage in Elsevier Editorial Manager (Pattern Recognition). No dependencies, no build step.",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}

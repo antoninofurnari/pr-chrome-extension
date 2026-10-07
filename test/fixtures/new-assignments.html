@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<!-- Synthetic fixture modelled on docs/em-structure.md §2. No real data. -->
+<html><head><meta charset="utf-8"><title>New Assignments</title></head>
+<body>
+<form id="form1" method="post" action="./NewAssignments.aspx">
+<table class="fg-cols-table fg-table"><tr><th></th><th>Action</th></tr></table>
+<table class="fg-cols-table fg-table"><tr><th>Manuscript Number</th><th>Article Type</th><th>Section Category</th><th>Article Title</th><th>Author Name</th><th>Initial Date Submitted</th><th>Status Date</th><th>Current Status</th><th>Editor Decision</th><th></th></tr></table>
+<table id="datatable" class="fg-table fg-rows-table"><tbody>
+<tr class="colresize-row"><td></td><td></td></tr>
+<tr id="fr0" data-identity="100001" data-rowindex="0">
+  <td class="fg-fixed-col greenBar"><div></div></td>
+  <td class="al-cell fg-fixed-col">
+  <div id="fg-al-1" class="al-menu" role="group" aria-label="TITLE" data-lookup="999" style="display:block;">
+    <div class="al-expanded">
+      <a href="javascript:viewEditorPDFs(100001, 'x', 0, 'y', 'z');">View Submission</a><br>
+      <a style="display:inline-block;" href="ViewEvaluateManuscript.aspx?displayName=X&amp;docId=100001">Evaluate Manuscript</a><br>
+      <a style="display:inline-block;" href="javascript:openCenterWin('DotNetPopUps/SimilarityCheckResults.aspx?docID=100001&amp;msid={AAA-111}','win1',1,1,0,0,0,0);">Similarity Check Results</a>
+      <span style="font-size:80%;" title="Similarity Check Status Summary: ok">(12%)</span><br>
+      <div><a style="white-space:nowrap;" href="javascript:openCenterWin('DuplicateSubmissionCheckResults.aspx?docID=100001','win2',1,1,0,0,0,0);">Duplicate Submission Check</a>
+           <span class="warning nowrap" style="font-size:80%;" title="EM Duplicate Score">(35%)</span></div>
+      <div class="linkWithFlags"><a class="linkWithFlags" style="display:inline-block" href="javascript:popupDetailsWindow(100001, 'PR-D-26-00001', '42')">Details</a>
+           <span id="flags100001"><span class="flag"><img src="/pr/img/setFlagIcon2.gif"></span></span></div>
+      <a href="javascript:popupDiscussionParticipants(1, 1, 'x')">Initiate Discussion</a><br>
+      <a class="assignEditor" href="javascript:editorAssignment(100001, false, false, false, false, false, 'sess-1')">Assign Editor</a><br>
+      <a href="javascript:undoEditorAssignment(100001, 'sess-1')">Unassign Editor</a><br>
+      <a href="EditorDecision.aspx?docid=100001&amp;msid={AAA-111}&amp;CurrentRow=1&amp;CurrentPage=1">Submit Editor's Decision and Comments</a><br>
+    </div>
+  </div></td>
+</tr>
+<tr id="fr1" class="fg-altrow" data-identity="100002" data-rowindex="1">
+  <td class="fg-fixed-col greenBar"><div></div></td>
+  <td class="al-cell fg-fixed-col">
+  <div id="fg-al-2" class="al-menu" data-lookup="998" style="display:block;">
+    <div class="al-expanded">
+      <a style="display:inline-block;" href="ViewEvaluateManuscript.aspx?displayName=X&amp;docId=100002">Evaluate Manuscript</a><img src="/pr/img/hypothetical-warning.gif" alt="warning"><br>
+      <a style="display:inline-block;" href="javascript:openCenterWin('DotNetPopUps/SimilarityCheckResults.aspx?docID=100002&amp;msid={BBB-222}','win3',1,1,0,0,0,0);">Similarity Check Results</a>
+      <span style="font-size:80%;">(41%)</span><br>
+      <div><a style="white-space:nowrap;" href="javascript:openCenterWin('DuplicateSubmissionCheckResults.aspx?docID=100002','win4',1,1,0,0,0,0);">Duplicate Submission Check</a>
+           <span class="warning nowrap" title="EM Duplicate Score">(64%)</span></div>
+      <div class="linkWithFlags"><a class="linkWithFlags" href="javascript:popupDetailsWindow(100002, 'PR-D-26-00002R1', '42')">Details</a></div>
+      <a class="assignEditor" href="javascript:editorAssignment(100002, false, false, false, false, false, 'sess-1')">Assign Editor</a><br>
+      <a href="EditorDecision.aspx?docid=100002&amp;msid={BBB-222}&amp;CurrentRow=2&amp;CurrentPage=1">Submit Editor's Decision and Comments</a><br>
+    </div>
+  </div></td>
+</tr>
+</tbody></table>
+<table id="datatable" class="fg-table fg-rows-table"><tbody>
+<tr class="colresize-row"><td></td></tr>
+<tr id="nfr0" data-identity="100001" data-rowindex="0"><td>PR-D-26-00001</td><td>Full Length Article</td><td>SECTION</td><td>TITLE</td>
+  <td><a><span class="hcite"><span class="creator vcard"><span class="n"><span class="fn"><span class="given-name">NAME</span></span></span></span></span></a></td>
+  <td>1/1/2026</td><td>1/2/2026</td><td>With Editor</td><td></td><td></td></tr>
+<tr id="nfr1" class="fg-altrow" data-identity="100002" data-rowindex="1"><td>PR-D-26-00002R1</td><td>Full Length Article</td><td>SECTION</td><td>TITLE</td>
+  <td><a><span class="hcite">NAME</span></a> <img src="../pr/img/dupdoc.gif" title="possible duplicate submission" alt="possible duplicate submission"></td>
+  <td>1/1/2026</td><td>1/2/2026</td><td>With Editor</td><td></td><td></td></tr>
+</tbody></table>
+</form>
+</body></html>

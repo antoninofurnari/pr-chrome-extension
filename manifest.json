@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "PR EM Helper",
+  "version": "0.1.0",
+  "description": "Personal triage helper for Pattern Recognition in Elsevier Editorial Manager. Read-only; all data stays in the browser.",
+  "minimum_chrome_version": "111",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.editorialmanager.com/pr/*"],
+  "background": {
+    "service_worker": "src/background/service-worker.js"
+  },
+  "action": {
+    "default_title": "PR EM Helper",
+    "default_popup": "src/popup/popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.editorialmanager.com/pr/*"],
+      "all_frames": true,
+      "run_at": "document_idle",
+      "css": ["src/content/styles.css"],
+      "js": [
+        "src/storage.js",
+        "src/content/em-parse.js",
+        "src/content/spikes.js",
+        "src/content/router.js"
+      ]
+    },
+    {
+      "matches": ["https://www.editorialmanager.com/pr/*"],
+      "all_frames": false,
+      "run_at": "document_idle",
+      "world": "MAIN",
+      "js": ["src/content/main-world.js"]
+    }
+  ]
+}

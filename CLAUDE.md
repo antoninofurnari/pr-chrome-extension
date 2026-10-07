@@ -120,7 +120,8 @@ src/
     list.js              F1: badges + popover on frozen-grid folder lists
     cockpit.js           F2: overlay (top window only), panels, checklist
     em-parse.js          pure functions: parse action-cell hrefs, duplicate table, author table (unit-testable)
-    main-world.js        tiny MAIN-world bridge, only if needed for editorAssignment
+    main-world.js        tiny MAIN-world bridge for editorAssignment (needed: see docs/findings.md §5)
+    spikes.js            M0 test panel (dev mode only); delete once M0 is closed
     styles.css           all UI styles, namespaced (prefix .preh-), never style EM's own elements
   background/
     service-worker.js    storage helpers if needed; dev hot-reload watcher
@@ -131,7 +132,13 @@ docs/
 test/
   fixtures/              synthetic/sanitized HTML only
   em-parse.test.js       node --test, no dependencies
+  em-parse.dom.test.js   same parsers on the fixtures in a real browser (skipped without Playwright)
+  e2e/smoke.mjs          loads the unpacked extension in Chromium with EM routed to the fixtures
 ```
+
+- Content scripts are **classic scripts** sharing one namespace (`globalThis.PREH.parse`, `.storage`, …) and listed in order in `manifest.json`. MV3 content scripts can't be ES modules without exposing files as web-accessible. `em-parse.js` also exports via `module.exports` for `node --test`.
+- Content scripts can't `fetch()` extension files; ask the service worker instead.
+- A `click()` dispatched from a content script on a `javascript:` link does nothing in Chrome. Use the MAIN-world bridge to call EM functions.
 
 - The list module runs inside `iframe#content` and asks the top window to open the cockpit via `window.top.postMessage` (same origin) with `{type:'preh:openCockpit', ms, docId, urls}`. All URLs are extracted from the action cell by `em-parse.js`.
 - **Debounce on navigation:** EM reloads `iframe#content` on every folder change, so the content scripts must be idempotent. Use a MutationObserver for late-rendered grids.

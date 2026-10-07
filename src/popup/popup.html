@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PR EM Helper</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <h1>PR EM Helper</h1>
+  <p class="muted"><span id="count">0</span> manuscripts with notes</p>
+
+  <section>
+    <button id="export">Export notes (JSON)</button>
+    <button id="import">Import notes…</button>
+    <input id="file" type="file" accept="application/json,.json" hidden>
+    <p id="msg" class="muted"></p>
+  </section>
+
+  <section>
+    <label><input id="dev" type="checkbox"> Dev mode (hot reload + spike panel)</label>
+  </section>
+
+  <script src="../storage.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

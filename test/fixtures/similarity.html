@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<!-- Synthetic fixture modelled on docs/em-structure.md §3.1. No real data. -->
+<html><head><meta charset="utf-8"><title>Similarity Check Results</title></head><body>
+<form id="ctl01" action="SimilarityCheckResults.aspx?docID=100001&amp;msid={AAA-111}">
+<table id="gridResults" class="datatable">
+<tr><th>Date:</th><th>Rev.</th><th>Triggered By</th><th>File Sent</th><th>Report Status</th><th>Score</th><th>Ignore Score</th></tr>
+<tr><td><span id="gridResults_ctl02_lblDate">DATE</span></td><td><span id="gridResults_ctl02_lblRevNum">0</span></td>
+<td><span id="gridResults_ctl02_tlblTriggeredBy">NAME</span></td><td><span id="gridResults_ctl02_lblFileName">FILE</span></td>
+<td><a id="gridResults_ctl02_lnkReportStatus" href="javascript:openV2ReportWindow(100001,'{AAA-111}','api-0000-1111')">Completed</a></td>
+<td><span id="gridResults_ctl02_lblScore">12%</span></td><td><input type="checkbox" id="gridResults_ctl02_chkIgnoreScore"></td></tr>
+</table>
+<a id="fileInventory" href="SubmissionFileInventory.aspx?msid=x&amp;docID=100001&amp;approvalType=1">File Inventory</a>
+</form></body></html>
