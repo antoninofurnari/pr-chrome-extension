@@ -243,14 +243,6 @@
       ['s4_eval', 'Only if warning icon: same paper + same authors → Reject (ethics); different authors → report to Publisher'],
     ]],
   ];
-  const DECISIONS = ['', 'Reject (Potential ethics concern)', 'Reject and offer transfer', 'Send back to author (via Managing Editor)', 'Assign Editor'];
-  // Choosing a decision also sets the status shown on the list.
-  const DECISION_STATUS = {
-    'Reject (Potential ethics concern)': 'Ready to reject',
-    'Reject and offer transfer': 'Ready to reject',
-    'Send back to author (via Managing Editor)': 'Send back requested',
-    'Assign Editor': 'Ready to assign',
-  };
   const ITEM_COUNT = CHECKLIST.reduce((n, [, , items]) => n + items.length, 0);
 
   function checklistDrawer(d, rec, right) {
@@ -296,46 +288,31 @@
       drawer.append(step);
     }
 
-    // Step 5: intended decision (a note for Antonino, nothing is sent to EM).
+    // Step 5: status (set by hand) — same field as the header selector and the list badge.
     const step5 = el('div', 'preh-step');
-    step5.append(el('div', 'preh-step-head', '5 · Decision'));
-    const decision = el('select', 'preh-decision');
-    for (const v of DECISIONS) {
-      const o = el('option', null, v || '—');
-      o.value = v;
-      if (v === (checklist.decision || '')) o.selected = true;
-      decision.append(o);
-    }
-    decision.addEventListener('change', () => {
-      checklist.decision = decision.value;
-      const status = DECISION_STATUS[decision.value];
-      if (status) {
-        // The header selector follows via chrome.storage.onChanged.
-        S.update(d.ms, { checklist: Object.assign({}, checklist), status, statusAt: new Date().toISOString() });
-      } else {
-        save();
-      }
-    });
-    step5.append(decision);
+    step5.append(el('div', 'preh-step-head', '5 · Status'));
+    const status = statusSelect(rec.status, (v) => S.update(d.ms, { status: v, statusAt: new Date().toISOString() }));
+    status.className = 'preh-checklist-status';
+    step5.append(status);
     drawer.append(step5);
 
-    // Send back notes (autosaved) + Copy.
+    // Note (the same note shown on the list badge), autosaved, + Copy.
     const notesHead = el('div', 'preh-step-head');
-    notesHead.append(el('span', null, 'Send back notes'));
+    notesHead.append(el('span', null, 'Note'));
     const copy = el('button', 'preh-btn preh-copy', 'Copy');
     copy.type = 'button';
     notesHead.append(copy);
-    const notes = el('textarea', 'preh-sendback');
+    const notes = el('textarea', 'preh-checklist-note');
     notes.rows = 6;
-    notes.placeholder = 'Items to send back to the authors…';
-    notes.value = rec.sendBackNotes || '';
+    notes.placeholder = 'Note (also shown on the list)…';
+    notes.value = rec.note || '';
     let pending = null;
     let lastSaved = notes.value;
     const saveNotes = () => {
       clearTimeout(pending);
       if (notes.value === lastSaved) return;
       lastSaved = notes.value;
-      S.update(d.ms, { sendBackNotes: notes.value });
+      S.update(d.ms, { note: notes.value });
     };
     notes.addEventListener('input', () => { clearTimeout(pending); pending = setTimeout(saveNotes, 400); });
     notes.addEventListener('blur', saveNotes);
@@ -352,7 +329,19 @@
     drawer.append(notesBox);
 
     updateProgress();
-    return { drawer, flush: saveNotes };
+    return { drawer, flush: saveNotes, status, notes };
+  }
+
+  function statusSelect(value, onChange) {
+    const sel = el('select', 'preh-cockpit-status');
+    for (const st of S.STATUSES) {
+      const o = el('option', null, st || '—');
+      o.value = st;
+      if (st === value) o.selected = true;
+      sel.append(o);
+    }
+    sel.addEventListener('change', () => onChange(sel.value));
+    return sel;
   }
 
   // Draggable divider between the left pane and the panels. The width (in %
@@ -436,14 +425,7 @@
     head.append(el('strong', 'preh-cockpit-ms', d.ms));
     if (d.revision > 0) head.append(el('span', 'preh-sum preh-sum-bad', 'Revision R' + d.revision + ': reassign to previous AE'));
     if (d.similarityPct != null) head.append(el('span', 'preh-cockpit-meta', 'Similarity ' + d.similarityPct + '%'));
-    const status = el('select', 'preh-cockpit-status');
-    for (const st of S.STATUSES) {
-      const o = el('option', null, st || '—');
-      o.value = st;
-      if (st === rec.status) o.selected = true;
-      status.append(o);
-    }
-    status.addEventListener('change', () => S.update(d.ms, { status: status.value, statusAt: new Date().toISOString() }));
+    const status = statusSelect(rec.status, (v) => S.update(d.ms, { status: v, statusAt: new Date().toISOString() }));
     const spacer = el('span', 'preh-spacer');
     const sim = similarityPane(d);
 
@@ -481,7 +463,13 @@
     // Keep the header status in sync with edits made elsewhere (list popover).
     const onChange = (changes, area) => {
       const c = area === 'local' && changes[S.MS_PREFIX + d.ms];
-      if (c && c.newValue && c.newValue.status !== status.value) status.value = c.newValue.status || '';
+      if (!c || !c.newValue) return;
+      // Keep both status selectors and the note in sync with edits made elsewhere.
+      for (const sel of [status, list.status]) sel.value = c.newValue.status || '';
+      if (document.activeElement !== list.notes && c.newValue.note !== list.notes.value) {
+        list.flush();
+        list.notes.value = c.newValue.note || '';
+      }
     };
     chrome.storage.onChanged.addListener(onChange);
     cockpit = { el: box, ms: d.ms, flush: list.flush, unsubscribe: () => chrome.storage.onChanged.removeListener(onChange) };

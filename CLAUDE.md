@@ -84,7 +84,6 @@ Antonino's operative workflow, in order. The checklist in the cockpit mirrors it
 - On every EM folder list using the frozen grid (start with `NewAssignments.aspx`; make the selector logic generic), inject a small badge into each data row: a status chip and a note icon.
 - Click → inline popover with:
   - **status**: `—`, `In triage`, `Waiting (reply)`, `Send back requested`, `Ready to assign`, `Ready to reject`, `Done`;
-  - choosing a decision in the cockpit checklist sets the status (Reject → `Ready to reject`, Send back → `Send back requested`, Assign Editor → `Ready to assign`); the popover also shows the decision and send-back notes read-only;
   - **free-text note**, autosaved;
   - **last-updated date**.
 - Storage key: manuscript number (stable across folders). Value: `{status, note, updatedAt, checklist: {...}, sendBackNotes}`.
@@ -101,7 +100,7 @@ Antonino's operative workflow, in order. The checklist in the cockpit mirrors it
     1. **Duplicate Submission Check.** iframe of `DuplicateSubmissionCheckResults.aspx?docID=…`, plus a computed summary badge on the panel header: EM Duplicate Score, max title similarity, max abstract similarity, green/red against the 50% / 70% thresholds. Compute it with a same-origin GET + DOMParser.
     2. **Author Status.** Fetch `EMDetails.aspx?...` (GET), extract the `ContributingAuthorStatus.aspx?...` URL, show it in an iframe. Optionally add a compact summary of roles per author, with a warning when an author has only "Writing – review & editing".
     3. **Evaluate Manuscript.** Collapsed by default. Header shows "warning: yes/no/unknown". Expanding loads `ViewEvaluateManuscript.aspx?...` in an iframe.
-  - **Checklist drawer** (right side or bottom): the 5 steps above as checkboxes, saved per manuscript, plus a "Send back notes" textarea and a "Copy" button.
+  - **Checklist drawer** (right side or bottom): steps 0–4 above as checkboxes, saved per manuscript; step 5 is the status selector (set by hand, no automatic mapping), followed by the manuscript note (the same note shown on the list) with a "Copy" button. (Antonino's choice: no separate decision field or send-back notes.)
   - **Footer buttons:**
     - "Open Assign Editor" opens EM's own assignment popup by dispatching a click on the row's `a.assignEditor`, or calling `editorAssignment` from the MAIN world.
     - "Open Decision page" navigates `iframe#content` to `EditorDecision.aspx?...` and closes the overlay.

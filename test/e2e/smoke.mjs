@@ -204,25 +204,24 @@ check(await drawer.locator('.preh-step', { hasText: '2 · Duplicate check' }).lo
 check(await drawer.locator('.preh-step', { hasText: '3 · Author Status' }).locator('.preh-sum').textContent() === '4 authors · 1 only review & editing · 1 without roles', 'M3: author summary mirrored next to step 3');
 await drawer.locator('input[data-id="s1_overlap"]').check();
 await drawer.locator('input[data-id="s2_dup"]').check();
-await drawer.locator('.preh-decision').selectOption('Reject and offer transfer');
+check(await drawer.locator('.preh-checklist-note').inputValue() === 'synthetic note', 'M3: checklist shows the list note');
+// Step 5 is the status, set by hand, synced with the header and the list
+await drawer.locator('.preh-checklist-status').selectOption('Ready to reject');
 await page.waitForTimeout(300);
-check(await cockpit.locator('.preh-cockpit-status').inputValue() === 'Ready to reject', 'M3: Reject decision sets status Ready to reject (header)');
+check(await cockpit.locator('.preh-cockpit-status').inputValue() === 'Ready to reject', 'M3: checklist status syncs the header');
 check(await list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-chip').textContent() === 'To reject', 'M3: and the list badge');
-await drawer.locator('.preh-decision').selectOption('Send back to author (via Managing Editor)');
+await cockpit.locator('.preh-cockpit-status').selectOption('Send back requested');
 await page.waitForTimeout(300);
-check(await cockpit.locator('.preh-cockpit-status').inputValue() === 'Send back requested', 'M3: Send back decision sets status');
-await drawer.locator('.preh-decision').selectOption('Assign Editor');
-await page.waitForTimeout(300);
-check(await cockpit.locator('.preh-cockpit-status').inputValue() === 'Ready to assign', 'M3: Assign decision sets status');
-await drawer.locator('.preh-decision').selectOption('Reject and offer transfer');
-await drawer.locator('.preh-sendback').fill('Missing CRediT statement.');
+check(await drawer.locator('.preh-checklist-status').inputValue() === 'Send back requested', 'M3: header status syncs the checklist');
+await drawer.locator('.preh-checklist-note').fill('Missing CRediT statement.');
 await drawer.locator('.preh-copy').click();
 await page.waitForTimeout(500);
-check(await page.evaluate(() => navigator.clipboard.readText()) === 'Missing CRediT statement.', 'M3: Copy puts send-back notes on the clipboard');
+check(await page.evaluate(() => navigator.clipboard.readText()) === 'Missing CRediT statement.', 'M3: Copy puts the note on the clipboard');
 check(await drawer.locator('.preh-checklist-head .preh-sum').textContent() === '2/11', 'M3: progress counter');
 const rec3 = (await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001')))['ms:PR-D-26-00001'];
-check(rec3.checklist.s1_overlap === true && rec3.checklist.s2_dup === true && rec3.checklist.decision === 'Reject and offer transfer' &&
-  rec3.sendBackNotes === 'Missing CRediT statement.' && rec3.note === 'synthetic note', 'M3: checklist, decision and notes saved (note kept)');
+check(rec3.checklist.s1_overlap === true && rec3.checklist.s2_dup === true && rec3.status === 'Send back requested' &&
+  rec3.note === 'Missing CRediT statement.', 'M3: checklist, status and note saved');
+check(await list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-note-icon').getAttribute('title') === 'Missing CRediT statement.', 'M3: note visible on the list badge');
 await cockpit.locator('button', { hasText: 'Checklist' }).click();
 check(!(await drawer.isVisible()), 'M3: Checklist button hides the drawer');
 await cockpit.locator('button', { hasText: 'Checklist' }).click();
@@ -258,21 +257,18 @@ await page.frame({ name: 'content' }).goto('https://www.editorialmanager.com/pr/
 await page.frame({ name: 'content' }).locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-triage-btn').click();
 await cockpit.waitFor();
 check(await cockpit.locator('input[data-id="s1_overlap"]').isChecked() && !(await cockpit.locator('input[data-id="s1_scope"]').isChecked()) &&
-  await cockpit.locator('.preh-decision').inputValue() === 'Reject and offer transfer' &&
-  await cockpit.locator('.preh-sendback').inputValue() === 'Missing CRediT statement.', 'M3: checklist restored on reopen');
-// Notes typed right before closing are not lost
-await cockpit.locator('.preh-sendback').fill('Typed then Esc');
-await cockpit.locator('.preh-sendback').press('Escape');
+  await cockpit.locator('.preh-checklist-note').inputValue() === 'Missing CRediT statement.', 'M3: checklist restored on reopen');
+// A note typed right before closing is not lost, and shows in the list popover
+await cockpit.locator('.preh-checklist-note').fill('Typed then Esc');
+await cockpit.locator('.preh-checklist-note').press('Escape');
 await page.waitForTimeout(300);
-check((await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001')))['ms:PR-D-26-00001'].sendBackNotes === 'Typed then Esc', 'M3: pending notes flushed on close');
+check((await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001')))['ms:PR-D-26-00001'].note === 'Typed then Esc', 'M3: pending note flushed on close');
 {
   const lf = page.frame({ name: 'content' });
   await lf.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-chip').click();
   await lf.waitForSelector('.preh-popover');
-  const pop = lf.locator('.preh-popover');
-  check(await pop.locator('.preh-pop-field', { hasText: 'Decision (checklist)' }).locator('.preh-pop-ro').textContent() === 'Reject and offer transfer' &&
-    await pop.locator('.preh-pop-sendback').textContent() === 'Typed then Esc', 'M3: list popover shows decision and send back notes');
-  await pop.locator('.preh-pop-note').press('Escape');
+  check(await lf.locator('.preh-pop-note').inputValue() === 'Typed then Esc', 'M3: same note in the list popover');
+  await lf.locator('.preh-pop-note').press('Escape');
 }
 // Messages from other frames are ignored
 await page.evaluate(() => window.postMessage({ type: 'preh:openCockpit', ms: 'PR-D-26-00001', similarityUrl: 'javascript:alert(1)' }, location.origin));
