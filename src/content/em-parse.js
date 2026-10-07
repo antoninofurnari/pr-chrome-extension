@@ -332,7 +332,7 @@
       maxAbstract,
       candidates: new Set(rows.map((r) => r.ms)).size,
       flagged: Array.from(flagged),
-      ok: scoreOk !== false && flagged.length === 0,
+      ok: scoreOk !== false && flagged.size === 0,
       unknownScore: emScore == null,
     };
   }
