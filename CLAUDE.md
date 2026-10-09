@@ -95,8 +95,9 @@ Antonino's operative workflow, in order. The checklist in the cockpit mirrors it
 - Main Menu (optional, later): a small floating panel listing manuscripts with status `Waiting` or `In triage`.
 
 ### F2. Triage cockpit
-- A "Triage" button on each row (next to the badge) opens a full-viewport overlay in the **top window**:
-  - header bar with MS number, status selector, close button (Esc);
+- A "Triage" button on each row (next to the badge) opens a **new tab** (one per manuscript, so several triages can be open) on EM's `default2.aspx`, where the cockpit is a full-viewport overlay in the top window:
+  - the row payload goes through `chrome.storage.local` (`preh:open:<token>`, purged after 7 days) and the token through the new window's name (`prehtab:<token>`, opened with `noopener`), so nothing about the manuscript is in the URL and a reload reopens the same cockpit;
+  - header bar with MS number, status selector, "Close tab" button (Esc does nothing in a triage tab); the bar colour is derived from the MS number and the tab title is the MS number, to tell tabs apart;
   - **left ~55%**: Similarity report.
     - Load `DotNetPopUps/SimilarityCheckResults.aspx?...` in an iframe, find the "Completed" link, extract `APISubmissionID` and load `CrossCheckResults.aspx?...` in the same iframe.
     - If Turnitin refuses framing, show a button "Open report (left half)" that opens a popup sized and positioned on the left half.
@@ -143,7 +144,7 @@ test/
 - Content scripts can't `fetch()` extension files; ask the service worker instead.
 - A `click()` dispatched from a content script on a `javascript:` link does nothing in Chrome. Use the MAIN-world bridge to call EM functions.
 
-- The list module runs inside `iframe#content` and asks the top window to open the cockpit via `window.top.postMessage` (same origin) with `{type:'preh:openCockpit', ms, docId, urls}`. All URLs are extracted from the action cell by `em-parse.js`.
+- The list module runs inside `iframe#content`; its Triage button stores the row payload (`{ms, docId, urls…}`, all URLs extracted from the action cell by `em-parse.js`) and opens the triage tab (see F2). There is no postMessage entry point.
 - **Debounce on navigation:** EM reloads `iframe#content` on every folder change, so the content scripts must be idempotent. Use a MutationObserver for late-rendered grids.
 
 ## Development loop and hot reload

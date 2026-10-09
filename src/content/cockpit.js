@@ -1,5 +1,7 @@
 // cockpit.js — F2: full-viewport triage overlay in the top window
-// (default2.aspx). Opened by list.js via window.top.postMessage.
+// (default2.aspx). Each triage runs in its own tab: list.js stores the row
+// payload under preh:open:<token> and opens default2.aspx in a new tab named
+// prehtab:<token>; here the top window picks it up (also after a reload).
 //
 // Left: Similarity report (Turnitin, reached through CrossCheckResults.aspx).
 // Right: Duplicate Submission Check, Author Status, Evaluate Manuscript.
@@ -404,7 +406,17 @@
   // open / close
   // ---------------------------------------------------------------------------
 
+  let tabMode = false; // the cockpit is the whole tab: Esc must not close it by accident
+
+  // Same manuscript -> same colour, so several triage tabs are easy to tell apart.
+  function msColor(ms) {
+    let h = 0;
+    for (const ch of ms) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return `hsl(${h % 360}, 55%, 30%)`;
+  }
+
   function onKey(e) {
+    if (tabMode) return;
     if (e.key === 'Escape') close();
   }
 
@@ -439,6 +451,7 @@
 
     // header
     const head = el('div', 'preh-cockpit-bar');
+    head.style.background = msColor(d.ms);
     head.append(el('strong', 'preh-cockpit-ms', d.ms));
     if (d.revision > 0) head.append(el('span', 'preh-sum preh-sum-bad', 'Revision R' + d.revision + ': reassign to previous AE'));
     if (d.similarityPct != null) head.append(el('span', 'preh-cockpit-meta', 'Similarity ' + d.similarityPct + '%'));
@@ -464,7 +477,7 @@
     }, 'Hide the panels on the right (temporary)');
     head.append(spacer, el('label', 'preh-cockpit-meta', 'Status '), status, toggleList, maximize,
       button('Open report (left half)', '', sim.openLeftHalf, 'Open the similarity report in a window on the left half of the screen'),
-      button('Close (Esc)', '', close));
+      tabMode ? button('Close tab', '', () => { close(); window.close(); }) : button('Close (Esc)', '', close));
 
     // footer
     const foot = el('div', 'preh-cockpit-foot');
@@ -495,14 +508,18 @@
   function init() {
     if (root.PREH.cockpitStarted) return;
     root.PREH.cockpitStarted = true;
-    window.addEventListener('message', (e) => {
-      if (e.origin !== location.origin || !e.data || e.data.type !== 'preh:openCockpit') return;
-      const content = document.getElementById('content');
-      if (!content || e.source !== content.contentWindow) return; // only from the list frame
-      if (!P.isMsNumber(e.data.ms)) return;
-      open(e.data);
-    });
     document.addEventListener('keydown', onKey);
+    // A triage tab opened by list.js (window.name survives reloads and EM redirects).
+    const m = /^prehtab:([\w-]+)$/.exec(window.name || '');
+    if (!m) return;
+    const key = 'preh:open:' + m[1];
+    chrome.storage.local.get(key).then((r) => {
+      const d = r[key] && r[key].payload;
+      if (!d || !P.isMsNumber(d.ms)) return;
+      tabMode = true;
+      document.title = d.ms + ' · Triage';
+      open(d);
+    });
   }
 
   root.PREH = root.PREH || {};

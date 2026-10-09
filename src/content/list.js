@@ -79,7 +79,6 @@
   function cockpitPayload(row) {
     const a = row.actions || {};
     return {
-      type: 'preh:openCockpit',
       ms: row.ms,
       docId: row.docId,
       revision: row.revision,
@@ -93,6 +92,21 @@
       decisionUrl: a.decisionUrl,
       assignEditorArgs: a.assignEditorArgs,
     };
+  }
+
+  // Each triage opens in its own tab (EM's default2.aspx + the cockpit). The
+  // payload goes through chrome.storage, keyed by a token carried in the new
+  // window's name, so nothing about the manuscript ends up in the URL.
+  const OPEN_PREFIX = 'preh:open:';
+  const OPEN_TTL = 7 * DAY; // kept a while so a reloaded triage tab still works
+
+  async function openTriageTab(payload) {
+    const token = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const all = await chrome.storage.local.get(null);
+    const stale = Object.keys(all).filter((k) => k.startsWith(OPEN_PREFIX) && !(Date.now() - all[k].at < OPEN_TTL));
+    if (stale.length) await chrome.storage.local.remove(stale);
+    await chrome.storage.local.set({ [OPEN_PREFIX + token]: { at: Date.now(), payload } });
+    window.open(P.EM_BASE + 'default2.aspx', 'prehtab:' + token, 'noopener');
   }
 
   function makeBadge(row) {
@@ -113,7 +127,7 @@
         e.preventDefault();
         e.stopPropagation();
         closePopover();
-        window.top.postMessage(cockpitPayload(row), location.origin);
+        openTriageTab(cockpitPayload(row));
       });
       badge.append(triage);
     }

@@ -137,59 +137,73 @@ check(await list.locator('.preh-badge[data-ms="PR-D-26-00002R1"] .preh-chip').te
 
 
 // ---- M2: cockpit ----
-const cockpit = page.locator('.preh-cockpit');
+// Each Triage opens its own tab (EM's default2.aspx + cockpit).
+let tp = null;
+let cockpit = null;
 const sum = (title) => cockpit.locator('.preh-panel', { hasText: title }).locator('.preh-sum');
-await list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-triage-btn').click();
-await cockpit.waitFor();
-check(await list.locator('.preh-cockpit').count() === 0, 'M2: cockpit is in the top window, not in the list frame');
+async function openTriage(ms) {
+  const [p] = await Promise.all([ctx.waitForEvent('page'), list.locator(`.preh-badge[data-ms="${ms}"] .preh-triage-btn`).click()]);
+  p.on('pageerror', (e) => check(false, 'page error (triage tab): ' + e.message));
+  tp = p;
+  cockpit = tp.locator('.preh-cockpit');
+  await cockpit.waitFor();
+  await tp.bringToFront();
+  return tp;
+}
+await openTriage('PR-D-26-00001');
+check(tp.url() === 'https://www.editorialmanager.com/pr/default2.aspx', 'tabs: triage opens EM in a new tab (no manuscript data in the URL)');
+check(await page.locator('.preh-cockpit').count() === 0, 'tabs: the list tab stays as it is');
+check(await tp.title() === 'PR-D-26-00001 · Triage', 'tabs: tab title is the manuscript number');
+check(await tp.evaluate(() => window.opener === null), 'tabs: opened with noopener');
+const color1 = await cockpit.locator('.preh-cockpit-bar').evaluate((e) => e.style.background);
 check(await cockpit.locator('.preh-cockpit-ms').textContent() === 'PR-D-26-00001', 'M2: header shows the manuscript number');
 check(await cockpit.locator('.preh-cockpit-status').inputValue() === 'Waiting (reply)', 'M2: header status loaded from storage');
 // Left: Similarity -> CrossCheckResults -> (fake) Turnitin
-await page.waitForFunction(() => {
+await tp.waitForFunction(() => {
   const f = document.querySelector('iframe[name="preh-similarity"]');
   try { return f && /CrossCheckResults/.test(f.contentWindow.location.href) && f.contentDocument.readyState === 'complete'; } catch (_) { return false; }
 }, null, { timeout: 5000 });
-check(page.frame({ name: 'preh-similarity' }).url() ===
+check(tp.frame({ name: 'preh-similarity' }).url() ===
   'https://www.editorialmanager.com/pr/CrossCheckResults.aspx?docID=100001&msid=%7BAAA-111%7D&APISubmissionID=api-0000-1111',
   'M2: left pane loads CrossCheckResults.aspx with the APISubmissionID from the Similarity page');
 // Duplicate summary (computed from the iframe)
-await page.waitForFunction(() => /title/.test(document.querySelector('.preh-cockpit .preh-panel .preh-sum').textContent));
+await tp.waitForFunction(() => /title/.test(document.querySelector('.preh-cockpit .preh-panel .preh-sum').textContent));
 check(await sum('Duplicate').textContent() === 'EM 35% · title 82% · abstract 71% · 2 > 70%', 'M2: duplicate summary');
 check(/preh-sum-bad/.test(await sum('Duplicate').getAttribute('class')), 'M2: duplicate summary is red');
 // Author Status (Details GET -> iframe)
-await page.waitForFunction(() => /authors/.test([...document.querySelectorAll('.preh-cockpit .preh-panel .preh-sum')][1].textContent));
+await tp.waitForFunction(() => /authors/.test([...document.querySelectorAll('.preh-cockpit .preh-panel .preh-sum')][1].textContent));
 check(await sum('Author Status').textContent() === '4 authors · CRediT 1 without roles', 'M2: author summary (CRediT rule)');
 check(/preh-sum-bad/.test(await sum('Author Status').getAttribute('class')), 'M2: CRediT red for an author without roles');
-check(await page.frame({ name: 'preh-authors' }).url().includes('ContributingAuthorStatus.aspx'), 'M2: author panel shows Author Status');
+check(await tp.frame({ name: 'preh-authors' }).url().includes('ContributingAuthorStatus.aspx'), 'M2: author panel shows Author Status');
 // Evaluate: collapsed and not loaded until opened
-check(await page.locator('iframe[name="preh-evaluate"]').count() === 0, 'M2: Evaluate not loaded while collapsed');
+check(await tp.locator('iframe[name="preh-evaluate"]').count() === 0, 'M2: Evaluate not loaded while collapsed');
 check(await sum('Evaluate').textContent() === 'warning icon: no', 'M2: evaluate warning summary');
 await cockpit.locator('.preh-panel-head', { hasText: 'Evaluate' }).click();
-await page.waitForSelector('iframe[name="preh-evaluate"]');
-await page.waitForFunction(() => { try { return !!document.querySelector('iframe[name="preh-evaluate"]').contentDocument.querySelector('#iframe_msa'); } catch (_) { return false; } });
+await tp.waitForSelector('iframe[name="preh-evaluate"]');
+await tp.waitForFunction(() => { try { return !!document.querySelector('iframe[name="preh-evaluate"]').contentDocument.querySelector('#iframe_msa'); } catch (_) { return false; } });
 check(true, 'M2: Evaluate loads on expand (with inner iframe)');
 // No content-script UI inside the cockpit's own iframes
-check(await page.frame({ name: 'preh-duplicate' }).locator('.preh-badge, .preh-cockpit').count() === 0, 'M2: no extension UI inside panel iframes');
+check(await tp.frame({ name: 'preh-duplicate' }).locator('.preh-badge, .preh-cockpit').count() === 0, 'M2: no extension UI inside panel iframes');
 // Resizable left pane: drag the divider to ~70%, width is remembered.
-const leftPct = () => page.evaluate(() => {
+const leftPct = () => tp.evaluate(() => {
   const m = document.querySelector('.preh-cockpit-main').getBoundingClientRect();
   return Math.round(document.querySelector('.preh-left').getBoundingClientRect().width / m.width * 100);
 });
 check(await leftPct() === 55, 'resize: default left width 55%');
 const mainBox = await cockpit.locator('.preh-cockpit-main').boundingBox();
 const bar = await cockpit.locator('.preh-splitter').boundingBox();
-await page.mouse.move(bar.x + 3, bar.y + bar.height / 2);
-await page.mouse.down();
-await page.mouse.move(mainBox.x + mainBox.width * 0.5, bar.y + 100, { steps: 3 }); // passes over iframes
-await page.mouse.move(mainBox.x + mainBox.width * 0.7, bar.y + 100, { steps: 5 });
-await page.mouse.up();
+await tp.mouse.move(bar.x + 3, bar.y + bar.height / 2);
+await tp.mouse.down();
+await tp.mouse.move(mainBox.x + mainBox.width * 0.5, bar.y + 100, { steps: 3 }); // passes over iframes
+await tp.mouse.move(mainBox.x + mainBox.width * 0.7, bar.y + 100, { steps: 5 });
+await tp.mouse.up();
 const dragged = await leftPct();
 check(dragged >= 69 && dragged <= 71, `resize: drag sets left width (~70%, got ${dragged}%)`);
 check((await sw.evaluate(() => chrome.storage.local.get('preh:leftWidth')))['preh:leftWidth'] === 70, 'resize: width saved');
 // Maximize hides the panels without reloading them.
-await page.frame({ name: 'preh-duplicate' }).evaluate(() => { window.__keep = 1; });
+await tp.frame({ name: 'preh-duplicate' }).evaluate(() => { window.__keep = 1; });
 await cockpit.locator('button', { hasText: 'Maximize report' }).click();
-check(!(await cockpit.locator('.preh-right').isVisible()) && await page.evaluate(() => {
+check(!(await cockpit.locator('.preh-right').isVisible()) && await tp.evaluate(() => {
   const m = document.querySelector('.preh-cockpit-main').getBoundingClientRect().width;
   const l = document.querySelector('.preh-left').getBoundingClientRect().width;
   const c = document.querySelector('.preh-checklist').getBoundingClientRect().width;
@@ -197,7 +211,7 @@ check(!(await cockpit.locator('.preh-right').isVisible()) && await page.evaluate
 }), 'maximize: left pane takes all the width next to the checklist');
 await cockpit.locator('button', { hasText: 'Show panels' }).click();
 check(await leftPct() === 70 && await cockpit.locator('.preh-right').isVisible(), 'maximize: Show panels restores the layout');
-check(await page.frame({ name: 'preh-duplicate' }).evaluate(() => window.__keep) === 1, 'maximize: panels not reloaded');
+check(await tp.frame({ name: 'preh-duplicate' }).evaluate(() => window.__keep) === 1, 'maximize: panels not reloaded');
 // ---- M3: checklist ----
 const drawer = cockpit.locator('.preh-checklist');
 check(await drawer.locator('input[type=checkbox]').count() === 11, 'M3: 11 checklist items');
@@ -226,7 +240,7 @@ check(await drawer.locator('.preh-checklist-status').inputValue() === 'Send back
 await drawer.locator('.preh-checklist-note').fill('Missing CRediT statement.');
 await drawer.locator('.preh-copy').click();
 await page.waitForTimeout(500);
-check(await page.evaluate(() => navigator.clipboard.readText()) === 'Missing CRediT statement.', 'M3: Copy puts the note on the clipboard');
+check(await tp.evaluate(() => navigator.clipboard.readText()) === 'Missing CRediT statement.', 'M3: Copy puts the note on the clipboard');
 check(await drawer.locator('.preh-checklist-head .preh-sum').textContent() === '2/11', 'M3: progress counter');
 const rec3 = (await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001')))['ms:PR-D-26-00001'];
 check(rec3.checklist.s1_overlap === true && rec3.checklist.s2_dup === true && rec3.status === 'Send back requested' &&
@@ -243,34 +257,43 @@ check(await list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-chip').text
 // Assign Editor via MAIN-world bridge
 await cockpit.locator('button', { hasText: 'Open Assign Editor' }).click();
 await page.waitForTimeout(300);
-check(await page.evaluate(() => window.__assignCalls) === 1, 'M2: Open Assign Editor calls editorAssignment once (top window)');
-// Esc from inside a same-origin panel closes the cockpit
-await page.frame({ name: 'preh-duplicate' }).locator('body').press('Escape');
-await page.waitForTimeout(200);
-check(await cockpit.count() === 0, 'M2: Esc inside a panel closes the cockpit');
-check(await list.locator('.preh-badge').count() === 2, 'M2: list unchanged after closing');
-// Revision row shows the Step 0 hint
-await list.locator('.preh-badge[data-ms="PR-D-26-00002R1"] .preh-triage-btn').click();
-await cockpit.waitFor();
+check(await tp.evaluate(() => window.__assignCalls) === 1, 'M2: Open Assign Editor calls editorAssignment once (top window)');
+// In a triage tab Esc does nothing (no accidental close); 'Close tab' closes it.
+await tp.frame({ name: 'preh-duplicate' }).locator('body').press('Escape');
+await tp.waitForTimeout(200);
+check(await cockpit.count() === 1, 'tabs: Esc does not close the triage tab');
+const firstTab = tp;
+// Several triage tabs at once, each with its own colour
+await openTriage('PR-D-26-00002R1');
+check(!firstTab.isClosed() && ctx.pages().includes(firstTab), 'tabs: two triage tabs open at the same time');
 check(await cockpit.locator('.preh-cockpit-bar', { hasText: 'Revision R1' }).count() === 1, 'M2: revision hint for R1');
+const color2 = await cockpit.locator('.preh-cockpit-bar').evaluate((e) => e.style.background);
+check(color1 && color2 && color1 !== color2, `tabs: header colour differs per manuscript (${color1} vs ${color2})`);
+await firstTab.locator('.preh-cockpit button', { hasText: 'Close tab' }).click();
+await page.waitForTimeout(300);
+check(firstTab.isClosed(), 'tabs: Close tab closes the tab');
+check(await list.locator('.preh-badge').count() === 2, 'M2: list unchanged');
 check(await leftPct() === 70, 'resize: width remembered in the next cockpit');
 await cockpit.locator('.preh-splitter').dblclick();
 check(await leftPct() === 55, 'resize: double-click resets to 55%');
 check(await sum('Evaluate').textContent() === 'warning icon: yes', 'M2: evaluate warning detected on row 2');
 // Decision: navigates iframe#content and closes the cockpit
 await cockpit.locator('button', { hasText: 'Open Decision page' }).click();
-await page.waitForTimeout(500);
+await tp.waitForTimeout(500);
 check(await cockpit.count() === 0, 'M2: Open Decision page closes the cockpit');
-check(page.frame({ name: 'content' }).url().includes('/pr/EditorDecision.aspx?docid=100002'), 'M2: iframe#content navigated to EditorDecision.aspx');
-// Checklist state comes back when the cockpit is reopened
-await page.frame({ name: 'content' }).goto('https://www.editorialmanager.com/pr/NewAssignments.aspx');
-await page.frame({ name: 'content' }).locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-triage-btn').click();
-await cockpit.waitFor();
+check(tp.frame({ name: 'content' }).url().includes('/pr/EditorDecision.aspx?docid=100002'), 'M2: the triage tab shows EditorDecision.aspx');
+check(page.frame({ name: 'content' }).url().endsWith('/pr/NewAssignments.aspx'), 'tabs: the list tab is untouched');
+// Checklist state comes back when the triage is reopened
+await openTriage('PR-D-26-00001');
 check(await cockpit.locator('input[data-id="s1_overlap"]').isChecked() && !(await cockpit.locator('input[data-id="s1_scope"]').isChecked()) &&
   await cockpit.locator('.preh-checklist-note').inputValue() === 'Missing CRediT statement.', 'M3: checklist restored on reopen');
+// The cockpit survives a reload of the triage tab
+await tp.reload();
+await cockpit.waitFor();
+check(await cockpit.locator('.preh-cockpit-ms').textContent() === 'PR-D-26-00001', 'tabs: reloading the triage tab reopens the cockpit');
 // A note typed right before closing is not lost, and shows in the list popover
 await cockpit.locator('.preh-checklist-note').fill('Typed then Esc');
-await cockpit.locator('.preh-checklist-note').press('Escape');
+await cockpit.locator('button', { hasText: 'Close tab' }).click();
 await page.waitForTimeout(300);
 check((await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001')))['ms:PR-D-26-00001'].note === 'Typed then Esc', 'M3: pending note flushed on close');
 {
@@ -280,10 +303,10 @@ check((await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001')))['m
   check(await lf.locator('.preh-pop-note').inputValue() === 'Typed then Esc', 'M3: same note in the list popover');
   await lf.locator('.preh-pop-note').press('Escape');
 }
-// Messages from other frames are ignored
+// The old postMessage entry point is gone: a forged message opens nothing
 await page.evaluate(() => window.postMessage({ type: 'preh:openCockpit', ms: 'PR-D-26-00001', similarityUrl: 'javascript:alert(1)' }, location.origin));
 await page.waitForTimeout(200);
-check(await cockpit.count() === 0, 'M2: openCockpit only accepted from iframe#content');
+check(await page.locator('.preh-cockpit').count() === 0, 'tabs: forged postMessage opens nothing');
 
 // Hot reload: change the stamp and expect the worker to call chrome.runtime.reload().
 // Under Playwright (--load-extension) the reloaded extension does not come back,
