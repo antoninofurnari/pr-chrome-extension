@@ -51,4 +51,9 @@ $('file').addEventListener('change', async () => {
 
 $('dev').addEventListener('change', () => S.setDev($('dev').checked));
 
+S.getSettings().then((o) => { $('recipient').value = o.recipient; $('signature').value = o.signature; });
+for (const id of ['recipient', 'signature']) {
+  $(id).addEventListener('input', () => S.setSettings({ recipient: $('recipient').value.trim(), signature: $('signature').value.trim() }));
+}
+
 refresh();

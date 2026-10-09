@@ -3,3 +3,5 @@ h1 { font-size: 15px; margin: 0 0 4px; }
 section { margin-top: 12px; }
 button { display: block; width: 100%; margin: 4px 0; padding: 6px; font: inherit; cursor: pointer; }
 .muted { color: #666; margin: 4px 0; }
+.field { display: block; margin-top: 4px; }
+.field input { display: block; width: 100%; box-sizing: border-box; font: inherit; }

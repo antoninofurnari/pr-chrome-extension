@@ -167,16 +167,32 @@
     const b = el('button', 'preh-btn preh-copy', label);
     b.type = 'button';
     b.addEventListener('click', () => {
-      const t = getText();
       const done = () => { b.textContent = 'Copied'; setTimeout(() => { b.textContent = label; }, 1200); };
-      navigator.clipboard.writeText(t).then(done, () => {});
+      Promise.resolve(getText()).then((t) => navigator.clipboard.writeText(t)).then(done, () => {});
     });
     return b;
   }
 
   // One line per author (roles as chips coloured by class, flags in words),
   // paper-level notes, and the text to copy (red: clarification, yellow: note).
-  function creditDetails(c) {
+  // One output of the message generator: title, Copy button(s), read-only preview.
+  function creditOutput(title, text, extraButtons) {
+    const box = el('div', 'preh-credit-out');
+    const head = el('div', 'preh-credit-out-head');
+    head.append(el('strong', null, title), ...(extraButtons || []), copyButton('Copy', () => text()));
+    const preview = el('textarea', 'preh-credit-preview');
+    preview.readOnly = true;
+    preview.rows = 5;
+    Promise.resolve(text()).then((t) => { preview.value = t; });
+    box.append(head, preview);
+    return box;
+  }
+
+  // One line per author (roles as chips coloured by class, flags in words),
+  // paper-level notes, and the generated texts (docs/credit-rules.md §7):
+  // RED -> (A) comments to authors + (B) email to the Journal Manager;
+  // YELLOW -> (C) note to the AE; the others can still be opened by hand.
+  function creditDetails(c, ms) {
     const box = el('details', 'preh-credit');
     box.open = c.level !== 'green';
     box.append(el('summary', null, 'CRediT details (' + c.level.toUpperCase() + ')'));
@@ -189,9 +205,23 @@
       box.append(row);
     }
     if (c.noOriginalDraft && !c.noCredit) box.append(el('div', 'preh-credit-paper', 'No author credited with Writing – original draft'));
-    if (c.level !== 'green') {
-      box.append(copyButton(c.level === 'red' ? 'Copy clarification text' : 'Copy note', () => P.creditText(c)));
+    if (c.level === 'green') {
+      box.append(el('div', 'preh-credit-paper preh-credit-ok', 'CRediT OK'));
+      return box;
     }
+    const email = () => S.getSettings().then((o) => P.creditEmail(c, ms, o));
+    const outputs = {
+      A: () => creditOutput('(A) Comments to authors', () => P.creditCommentsText(c)),
+      B: () => creditOutput('(B) Email to the Journal Manager', () => email().then((e) => e.body),
+        [copyButton('Copy subject', () => email().then((e) => e.subject))]),
+      C: () => creditOutput('(C) Note to the AE', () => P.creditAeNote(c)),
+    };
+    const shown = c.level === 'red' ? ['A', 'B'] : ['C'];
+    for (const k of shown) box.append(outputs[k]());
+    const other = el('details', 'preh-credit-other');
+    other.append(el('summary', null, 'Other texts'));
+    for (const k of ['A', 'B', 'C'].filter((x) => !shown.includes(x))) other.append(outputs[k]());
+    box.append(other);
     return box;
   }
 
@@ -217,7 +247,7 @@
       setSummary(p.summary, text, CREDIT_LEVEL[credit.level], 'See the CRediT details at the top of the panel');
       const old = p.body.querySelector('.preh-credit');
       if (old) old.remove();
-      p.body.insertBefore(creditDetails(credit), f);
+      p.body.insertBefore(creditDetails(credit, d.ms), f);
     });
     p.body.append(f);
     fetchDoc(url).then((doc) => {

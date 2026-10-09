@@ -122,6 +122,7 @@ await popup.waitForFunction(() => document.getElementById('count').textContent =
 check(true, 'F3: popup counts 1 record');
 await popup.waitForFunction(() => /^\d+$/.test(document.getElementById('build').textContent));
 check(true, 'popup shows the build stamp');
+check(await popup.inputValue('#recipient') === 'Sami' && await popup.inputValue('#signature') === 'Antonino', 'popup: email settings defaults');
 const [download] = await Promise.all([popup.waitForEvent('download'), popup.click('#export')]);
 const exported = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
 check(exported.format === 'preh-notes-v1' && exported.records['PR-D-26-00001'].note === 'synthetic note', 'F3: export contains the record');
@@ -185,11 +186,22 @@ check(/preh-sum-bad/.test(await sum('Author Status').getAttribute('class')), 'CR
     'CRediT: roles as chips by class, flags in words');
   check(await rows.nth(1).locator('.preh-role-substantive').count() === 2, 'CRediT: substantive chips');
   check(/no roles/.test(await rows.nth(3).textContent()), 'CRediT: no roles flag');
-  await det.locator('button', { hasText: 'Copy clarification text' }).click();
+  const outA = det.locator('.preh-credit-out', { hasText: '(A) Comments to authors' });
+  await outA.locator('button', { hasText: /^Copy$/ }).click();
   await tp.waitForTimeout(300);
   const clip = await tp.evaluate(() => navigator.clipboard.readText());
-  check(/^Before your manuscript can be considered further/.test(clip) && /Author NAME B is listed only under "Writing – review & editing"\./.test(clip) &&
-    /No contributor roles are provided for author NAME D\./.test(clip), 'CRediT: Copy clarification text (with names)');
+  check(clip.startsWith('We noticed some issues with the author contribution (CRediT) statement of your manuscript. NAME B is listed only under "Writing – review & editing". No contributor roles are listed for NAME D.\n\nAuthors are free to choose their CRediT roles') &&
+    clip.endsWith('both in Editorial Manager and in the manuscript? Please also make sure that contributor roles are provided for all authors.'), 'CRediT: (A) comments to authors copied');
+  check(await outA.locator('.preh-credit-preview').inputValue() === clip, 'CRediT: (A) preview matches the copied text');
+  const outB = det.locator('.preh-credit-out', { hasText: '(B) Email to the Journal Manager' });
+  await outB.locator('button', { hasText: 'Copy subject' }).click();
+  await tp.waitForTimeout(300);
+  check(await tp.evaluate(() => navigator.clipboard.readText()) === 'PR-D-26-00001 – Send back to authors (CRediT statement)', 'CRediT: (B) subject');
+  await outB.locator('button', { hasText: /^Copy$/ }).click();
+  await tp.waitForTimeout(300);
+  const mail = await tp.evaluate(() => navigator.clipboard.readText());
+  check(mail.startsWith('Dear Sami,\n\nDuring the initial assessment of manuscript PR-D-26-00001') && mail.includes('---\n' + clip + '\n---') && mail.endsWith('Thank you,\nAntonino'), 'CRediT: (B) email wraps (A)');
+  check(!(await det.locator('.preh-credit-other .preh-credit-out', { hasText: '(C) Note to the AE' }).isVisible()), 'CRediT: (C) available under "Other texts" (closed)');
 }
 check(await tp.frame({ name: 'preh-authors' }).url().includes('ContributingAuthorStatus.aspx'), 'M2: author panel shows Author Status');
 // Evaluate: collapsed and not loaded until opened
@@ -238,8 +250,8 @@ check(await drawer.locator('.preh-step', { hasText: '3 · Author Status' }).loca
 await drawer.locator('.preh-credit-btn').click();
 await page.waitForTimeout(300);
 const creditNote = await drawer.locator('.preh-checklist-note').inputValue();
-check(creditNote.startsWith('synthetic note\n\nBefore your manuscript can be considered further') && /Author NAME B is listed only under/.test(creditNote) &&
-  /No contributor roles are provided for author NAME D\./.test(creditNote), 'CRediT: clarification text appended to the note');
+check(creditNote.startsWith('synthetic note\n\nWe noticed some issues with the author contribution (CRediT) statement') && /No contributor roles are listed for NAME D\./.test(creditNote),
+  'CRediT: (A) appended to the note');
 check((await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001')))['ms:PR-D-26-00001'].note === creditNote, 'CRediT: note saved');
 await drawer.locator('.preh-checklist-note').fill('synthetic note');
 await page.waitForTimeout(500);

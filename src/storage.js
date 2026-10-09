@@ -78,6 +78,19 @@
     return Object.keys(toSet).length;
   }
 
+  // Settings for the CRediT email to the Journal Manager (popup).
+  const SETTINGS_DEFAULTS = { recipient: 'Sami', signature: 'Antonino' };
+  async function getSettings() {
+    const r = await chrome.storage.local.get(['preh:recipient', 'preh:signature']);
+    return {
+      recipient: r['preh:recipient'] || SETTINGS_DEFAULTS.recipient,
+      signature: r['preh:signature'] || SETTINGS_DEFAULTS.signature,
+    };
+  }
+  async function setSettings(o) {
+    await chrome.storage.local.set({ 'preh:recipient': o.recipient, 'preh:signature': o.signature });
+  }
+
   async function isDev() {
     const res = await chrome.storage.local.get(DEV_KEY);
     return !!res[DEV_KEY];
@@ -88,5 +101,5 @@
   }
 
   root.PREH = root.PREH || {};
-  root.PREH.storage = { STATUSES, MS_PREFIX, DEV_KEY, emptyRecord, get, getMany, update, all, exportAll, importAll, isDev, setDev };
+  root.PREH.storage = { STATUSES, MS_PREFIX, DEV_KEY, emptyRecord, get, getMany, update, all, exportAll, importAll, getSettings, setSettings, isDev, setDev };
 })(globalThis);

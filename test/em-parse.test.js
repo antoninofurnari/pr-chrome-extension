@@ -82,12 +82,23 @@ test('summarizeDuplicates: repeated candidates count once', () => {
   assert.equal(s.maxTitle, 90);
 });
 
-// ---- CRediT (docs/credit-rules.md, test cases A–G) ----
+// ---- CRediT (docs/credit-rules.md, test cases A–G and golden texts §7.5) ----
 const ALL = P.CREDIT_ROLES.map(([n]) => n);
 const RE = 'Writing – review & editing';
 const OD = 'Writing – original draft';
-const au = (order, roles, name) => ({ order: String(order), name: name || 'NAME ' + order, roles });
+const au = (order, roles) => ({ order: String(order), name: `<NAME${order}>`, roles });
 const credit = (list) => P.creditAssessment(list);
+const FIXED = 'Authors are free to choose their CRediT roles, but these should reflect each author\'s actual contribution. According to the journal\'s authorship criteria, each author should have made a substantial contribution to the conception or design of the work, or to the acquisition, analysis or interpretation of data, and should have drafted the work or revised it critically for important intellectual content. Could you please check the contributor roles of all authors against these criteria and update the statement where needed, both in Editorial Manager and in the manuscript?';
+
+const caseA = () => [au(1, ALL), au(2, [RE]), au(3, [RE]), au(4, [RE]), au(5, [RE]), au(6, [RE])];
+const caseB = () => [
+  au(1, ['Data curation', 'Formal analysis', 'Methodology', 'Software']),
+  au(2, ['Funding acquisition', 'Validation', 'Visualization']),
+  au(3, ['Conceptualization']), au(4, ['Investigation']),
+  au(5, ['Funding acquisition', 'Resources']), au(6, [RE]),
+  au(7, ['Conceptualization', 'Project administration']),
+];
+const caseC = () => [au(1, ['Methodology', OD]), au(2, ['Formal analysis']), au(3, ['Formal analysis']), au(4, ['Investigation', RE]), au(5, ['Methodology'])];
 
 test('CRediT: role normalization and classes', () => {
   assert.deepEqual(P.classifyRole('writing - Review and Editing'), { name: RE, cls: 'writing' });
@@ -98,79 +109,90 @@ test('CRediT: role normalization and classes', () => {
   assert.equal(P.CREDIT_ROLES.length, 14);
 });
 
-test('CRediT case A: one author has all roles, 2–6 review & editing only -> RED', () => {
-  const c = credit([au(1, ALL), au(2, [RE]), au(3, [RE]), au(4, [RE]), au(5, [RE]), au(6, [RE])]);
+test('CRediT case A -> RED, golden (A)', () => {
+  const c = credit(caseA());
   assert.equal(c.level, 'red');
   assert.equal(c.deficient.length, 5);
-  assert.ok(c.authors[0].allRoles);
-  const t = P.creditRedText(c);
-  assert.match(t, /Authors NAME 2, NAME 3, NAME 4, NAME 5 and NAME 6 are listed only under "Writing – review & editing"\./);
-  assert.match(t, /Author NAME 1 is listed under all contributor roles, including Supervision and Funding acquisition\./);
-  assert.match(t, /Acknowledgements/);
-  assert.doesNotMatch(t, /Author \d/); // names, never numbers
+  assert.equal(P.creditCommentsText(c),
+    'We noticed some issues with the author contribution (CRediT) statement of your manuscript. <NAME2>, <NAME3>, <NAME4>, <NAME5> and <NAME6> are listed only under "Writing – review & editing". At the same time, <NAME1> is listed under almost all contributor roles, including "Funding acquisition" and "Supervision".\n\n' + FIXED);
 });
 
-test('CRediT case B: support-only + writing-only -> RED, plus no original draft', () => {
-  const c = credit([
-    au(1, ['Data curation', 'Formal analysis', 'Methodology', 'Software']),
-    au(2, ['Funding acquisition', 'Validation', 'Visualization']),
-    au(3, ['Conceptualization']), au(4, ['Investigation']),
-    au(5, ['Funding acquisition', 'Resources']), au(6, [RE]),
-    au(7, ['Conceptualization', 'Project administration']),
-  ]);
+test('CRediT case B -> RED + noOriginalDraft, golden (A)', () => {
+  const c = credit(caseB());
   assert.equal(c.level, 'red');
-  assert.deepEqual(c.deficient.map((a) => [a.name, a.kind]), [['NAME 5', 'supportOnly'], ['NAME 6', 'writingOnly']]);
-  assert.ok(c.noOriginalDraft);
-  const t = P.creditRedText(c);
-  assert.match(t, /NAME 5 \("Funding acquisition" and "Resources"\); NAME 6 \("Writing – review & editing"\)/);
-  assert.match(t, /No author is listed under "Writing – original draft"/);
+  assert.deepEqual(c.deficient.map((a) => [a.name, a.kind]), [['<NAME5>', 'supportOnly'], ['<NAME6>', 'writingOnly']]);
+  assert.equal(P.creditCommentsText(c),
+    'We noticed some issues with the author contribution (CRediT) statement of your manuscript. <NAME5> is listed only under "Funding acquisition" and "Resources", and <NAME6> only under "Writing – review & editing". In addition, no author is listed under "Writing – original draft".\n\n' +
+    FIXED + ' Please also make sure that the author(s) who drafted the manuscript are listed under "Writing – original draft".');
 });
 
-const caseC = () => [au(1, ['Methodology', OD]), au(2, ['Formal analysis']), au(3, ['Formal analysis']), au(4, ['Investigation', RE]), au(5, ['Methodology'])];
+test('CRediT case B -> (B) email wraps (A)', () => {
+  const c = credit(caseB());
+  const e = P.creditEmail(c, '<MS>');
+  assert.equal(e.subject, '<MS> – Send back to authors (CRediT statement)');
+  assert.ok(e.body.startsWith('Dear Sami,\n\nDuring the initial assessment of manuscript <MS>, I noticed some issues with the author contribution (CRediT) statement. Could you please send the manuscript back to the authors with the comments below?\n\n---\n'));
+  assert.ok(e.body.includes('---\n' + P.creditCommentsText(c) + '\n---\n'));
+  assert.ok(e.body.endsWith('\n\nOnce the authors resubmit, please assign the manuscript back to me.\n\nThank you,\nAntonino'));
+  const e2 = P.creditEmail(c, '<MS>', { recipient: 'X', signature: 'Y' });
+  assert.ok(e2.body.startsWith('Dear X,') && e2.body.endsWith('Thank you,\nY'));
+});
 
-test('CRediT case C: noWriting is informational only -> GREEN', () => {
+test('CRediT case C -> GREEN, no texts', () => {
   const c = credit(caseC());
   assert.equal(c.level, 'green');
   assert.deepEqual(c.authors.filter((a) => a.noWriting).map((a) => a.order), ['2', '3', '5']);
   assert.equal(P.creditText(c), '');
 });
 
-test('CRediT case D: one support-only author -> YELLOW', () => {
+test('CRediT case D -> YELLOW, golden (C)', () => {
   const list = caseC();
   list[4] = au(5, ['Funding acquisition', 'Supervision']);
   const c = credit(list);
   assert.equal(c.level, 'yellow');
-  assert.equal(P.creditYellowText(c), 'CRediT note: NAME 5 has support roles only (Funding acquisition, Supervision). Not blocking; the authors may be asked to complete the statement at revision.');
+  assert.equal(P.creditAeNote(c),
+    'A note on the CRediT statement, not blocking at triage: <NAME5> is listed only under "Funding acquisition" and "Supervision". It would be good to ask the authors to complete it at the first revision.');
 });
 
-test('CRediT case E: nobody has original draft -> YELLOW', () => {
+test('CRediT case E -> YELLOW (noOriginalDraft as the only issue)', () => {
   const list = caseC();
   list[0] = au(1, ['Methodology']);
   const c = credit(list);
   assert.equal(c.level, 'yellow');
-  assert.match(P.creditText(c), /no author credited with Writing – original draft/);
+  assert.equal(P.creditAeNote(c), 'A note on the CRediT statement, not blocking at triage: No author is listed under "Writing – original draft". It would be good to ask the authors to complete it at the first revision.');
 });
 
-test('CRediT case F: an author with no roles -> RED', () => {
+test('CRediT case F -> RED (noRoles)', () => {
   const c = credit([au(1, ['Conceptualization', OD]), au(2, [])]);
   assert.equal(c.level, 'red');
-  assert.match(P.creditRedText(c), /No contributor roles are provided for author NAME 2\./);
+  assert.equal(P.creditCommentsText(c),
+    'We noticed an issue with the author contribution (CRediT) statement of your manuscript. No contributor roles are listed for <NAME2>.\n\n' +
+    FIXED + ' Please also make sure that contributor roles are provided for all authors.');
 });
 
-test('CRediT case G: single author without a substantial role -> RED', () => {
+test('CRediT case G -> RED (single author without a substantial role)', () => {
   const c = credit([au(1, [OD])]);
   assert.equal(c.level, 'red');
-  assert.match(P.creditRedText(c), /Please specify your substantial contribution/);
+  assert.match(P.creditCommentsText(c), /^We noticed an issue with .*\. <NAME1> is listed only under "Writing – original draft"\.\n\n/);
 });
 
-test('CRediT: no statement at all, unknown roles', () => {
-  const c = credit([au(1, []), au(2, [])]);
-  assert.equal(c.level, 'red');
-  assert.ok(c.noCredit);
-  assert.match(P.creditRedText(c), /No contributor roles are provided for any author/);
+test('CRediT: three groups, no statement at all, unknown roles', () => {
+  const c = credit([au(1, ['Methodology', OD]), au(2, [RE]), au(3, ['Supervision']), au(4, [RE]), au(5, ['Resources', RE])]);
+  assert.equal(P.creditIssues(c).sentences[0],
+    '<NAME2> and <NAME4> are listed only under "Writing – review & editing", <NAME3> only under "Supervision", and <NAME5> only under "Resources" and "Writing – review & editing".');
+  const none = credit([au(1, []), au(2, [])]);
+  assert.ok(none.noCredit && none.level === 'red');
+  assert.equal(P.creditCommentsText(none),
+    'We noticed that the author contribution (CRediT) statement is missing.\n\n' + FIXED + ' Please also make sure that contributor roles are provided for all authors.');
   const u = P.creditAuthor(au(1, ['Coffee', RE]));
   assert.ok(u.noSubstantive);
   assert.deepEqual(P.creditAuthorFlags(u), ['no substantial contribution', 'unrecognized role: Coffee']);
+});
+
+test('CRediT texts never mention the Acknowledgements or use "and/or"', () => {
+  for (const list of [caseA(), caseB()]) {
+    const t = P.creditCommentsText(credit(list));
+    assert.doesNotMatch(t, /Acknowledgements|and\/or/);
+  }
 });
 
 test('msColor: stable per manuscript, different across manuscripts', () => {

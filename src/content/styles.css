@@ -134,3 +134,11 @@
 .preh-credit-flags { color: #9b1c1c; font-size: 11px; margin-left: 4px; }
 .preh-credit-paper { color: #92400e; margin-top: 3px; }
 .preh-credit .preh-copy { margin: 5px 0 0; }
+.preh-credit-out { margin-top: 6px; }
+.preh-credit-out-head { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.preh-credit-out-head strong { margin-right: auto; font-size: 12px; }
+.preh-credit-out-head .preh-copy { margin: 0; padding: 2px 8px; }
+.preh-credit-preview { width: 100%; box-sizing: border-box; font: 11px/1.35 system-ui, sans-serif; resize: vertical; background: #fff; }
+.preh-credit-other { margin-top: 6px; }
+.preh-credit-other > summary { cursor: pointer; color: #555; }
+.preh-credit-ok { color: #166534; }

@@ -486,61 +486,94 @@
     return out;
   }
 
-  // RED: clarification request for the authors (section 7). Names, not numbers.
-  function creditRedText(c) {
-    if (c.level !== 'red') return '';
-    const paras = ['Before your manuscript can be considered further, please revise the author contribution (CRediT) statement, both in Editorial Manager and in the manuscript.'];
-    const weak = c.deficient.filter((a) => !a.noRoles);
-    if (weak.length) {
-      const groups = new Map();
-      for (const a of weak) {
-        const k = quoteRoles(a.roles);
-        if (!groups.has(k)) groups.set(k, []);
-        groups.get(k).push(a.name);
-      }
-      let first;
-      if (groups.size === 1) {
-        const [[roles, names]] = groups;
-        first = names.length === 1 ? `Author ${names[0]} is listed only under ${roles}.`
-          : `Authors ${joinNames(names)} are listed only under ${roles}.`;
-      } else {
-        first = 'The following authors are listed only under the roles indicated: ' +
-          Array.from(groups, ([roles, names]) => `${joinNames(names)} (${roles})`).join('; ') + '.';
-      }
-      paras.push(first + ' According to the journal\'s authorship criteria, each author must have made a substantial contribution to the conception or design of the work, or to the acquisition, analysis or interpretation of data, in addition to drafting or critically revising the manuscript. ' +
-        (c.single ? 'Please specify your substantial contribution to the work.'
-          : `Please specify the substantial contribution of ${weak.length === 1 ? 'this author' : 'each of these authors'} or, if they do not meet the criteria, consider moving them to the Acknowledgements section.`));
+  // ---------------------------------------------------------------------------
+  // Message generator (docs/credit-rules.md §7): deterministic templates, no
+  // AI, all local. Same input -> same text. The extension never sends it.
+  // ---------------------------------------------------------------------------
+
+  const CREDIT_FIXED_PARAGRAPH = 'Authors are free to choose their CRediT roles, but these should reflect each author\'s actual contribution. According to the journal\'s authorship criteria, each author should have made a substantial contribution to the conception or design of the work, or to the acquisition, analysis or interpretation of data, and should have drafted the work or revised it critically for important intellectual content. Could you please check the contributor roles of all authors against these criteria and update the statement where needed, both in Editorial Manager and in the manuscript?';
+  const CREDIT_MISSING = 'We noticed that the author contribution (CRediT) statement is missing.';
+  // Support roles named for an allRoles author, in this order of preference.
+  const SUPPORT_PREFERENCE = ['Funding acquisition', 'Supervision', 'Resources', 'Project administration'];
+
+  // §7.1: the issue sentences (without the opening) and the number of issues.
+  function creditIssues(c) {
+    const sentences = [];
+    let issues = 0;
+    // Step 1: authors without a substantial contribution, grouped by identical role set.
+    const groups = [];
+    for (const a of c.authors.filter((x) => x.noSubstantive)) {
+      const key = a.roles.map((r) => r.name).slice().sort().join('|');
+      let g = groups.find((x) => x.key === key);
+      if (!g) groups.push(g = { key, roles: a.roles, names: [] });
+      g.names.push(a.name);
     }
-    if (c.noOriginalDraft && !c.noCredit) paras.push('No author is listed under "Writing – original draft". Please indicate which author(s) drafted the manuscript.');
-    if (weak.length) {
+    if (groups.length) {
+      issues += groups.length;
+      const clauses = groups.map((g, i) => joinNames(g.names) +
+        (i === 0 ? (g.names.length === 1 ? ' is listed only under ' : ' are listed only under ') : ' only under ') +
+        quoteRoles(g.roles));
+      sentences.push(clauses.length === 1 ? clauses[0] + '.'
+        : clauses.slice(0, -1).join(', ') + ', and ' + clauses[clauses.length - 1] + '.');
+    }
+    // Step 2: an author with (almost) all roles, only when 2+ authors are deficient.
+    if (c.deficient.length >= 2) {
       for (const a of c.authors.filter((x) => x.allRoles)) {
-        const incl = ['Supervision', 'Funding acquisition'].filter((n) => a.roles.some((r) => r.name === n));
-        paras.push(`Author ${a.name} is listed under ${a.roles.length >= 14 ? 'all' : a.roles.length + ' of the 14'} contributor roles` +
-          (incl.length ? ', including ' + joinNames(incl) : '') + '. Please verify that the roles are correctly assigned to each author.');
+        issues++;
+        const held = SUPPORT_PREFERENCE.filter((n) => a.roles.some((r) => r.name === n)).slice(0, 2);
+        sentences.push(`At the same time, ${a.name} is listed under almost all contributor roles` +
+          (held.length ? ', including ' + joinNames(held.map((n) => '"' + n + '"')) : '') + '.');
       }
     }
-    if (c.noCredit) paras.push('No contributor roles are provided for any author. Please complete the CRediT statement for all authors.');
-    else if (c.noRolesList.length) paras.push(`No contributor roles are provided for ${c.noRolesList.length === 1 ? 'author' : 'authors'} ${joinNames(c.noRolesList.map((a) => a.name))}. Please complete the CRediT statement for all authors.`);
-    return paras.join('\n\n');
-  }
-
-  // YELLOW: short note for Antonino's records / the AE (section 7).
-  function creditYellowText(c) {
-    if (c.level !== 'yellow') return '';
-    const items = [];
-    for (const a of c.deficient) {
-      const what = a.kind === 'supportOnly' ? 'support roles only'
-        : a.kind === 'writingOnly' ? 'writing roles only'
-        : a.kind === 'writingAndSupport' ? 'writing and support roles only' : 'no substantial role';
-      items.push(`${a.name} has ${what} (${a.roles.map((r) => r.name).join(', ')})`);
+    // Step 3: nobody wrote the original draft.
+    if (c.noOriginalDraft) issues++;
+    // Step 4: authors without roles.
+    if (c.noRolesList.length) issues++;
+    if (c.noOriginalDraft) {
+      sentences.push(issues === 1 ? 'No author is listed under "Writing – original draft".'
+        : 'In addition, no author is listed under "Writing – original draft".');
     }
-    if (c.noOriginalDraft) items.push('no author credited with Writing – original draft');
-    return `CRediT note: ${items.join('; ')}. Not blocking; the authors may be asked to complete the statement at revision.`;
+    if (c.noRolesList.length) sentences.push(`No contributor roles are listed for ${joinNames(c.noRolesList.map((a) => a.name))}.`);
+    return { sentences, issues };
   }
 
-  // The text that fits the level: clarification (red), note (yellow), '' (green).
+  // (A) Comments to authors — RED.
+  function creditCommentsText(c) {
+    let first;
+    if (c.noCredit) {
+      first = CREDIT_MISSING;
+    } else {
+      const { sentences, issues } = creditIssues(c);
+      if (!issues) return '';
+      first = `We noticed ${issues > 1 ? 'some issues' : 'an issue'} with the author contribution (CRediT) statement of your manuscript. ` + sentences.join(' ');
+    }
+    let second = CREDIT_FIXED_PARAGRAPH;
+    if (c.noOriginalDraft && !c.noCredit) second += ' Please also make sure that the author(s) who drafted the manuscript are listed under "Writing – original draft".';
+    if (c.noRolesList.length || c.noCredit) second += ' Please also make sure that contributor roles are provided for all authors.';
+    return first + '\n\n' + second;
+  }
+
+  // (B) Email to the Journal Manager — RED (wraps A).
+  function creditEmail(c, ms, opts) {
+    const o = Object.assign({ recipient: 'Sami', signature: 'Antonino' }, opts);
+    const a = creditCommentsText(c);
+    if (!a) return null;
+    return {
+      subject: `${ms} – Send back to authors (CRediT statement)`,
+      body: `Dear ${o.recipient},\n\nDuring the initial assessment of manuscript ${ms}, I noticed some issues with the author contribution (CRediT) statement. Could you please send the manuscript back to the authors with the comments below?\n\n---\n${a}\n---\n\nOnce the authors resubmit, please assign the manuscript back to me.\n\nThank you,\n${o.signature}`,
+    };
+  }
+
+  // (C) Note to the AE — YELLOW (or a RED case not sent back).
+  function creditAeNote(c) {
+    const body = c.noCredit ? 'the author contribution (CRediT) statement is missing.' : creditIssues(c).sentences.join(' ');
+    if (!body) return '';
+    return `A note on the CRediT statement, not blocking at triage: ${body} It would be good to ask the authors to complete it at the first revision.`;
+  }
+
+  // The text that fits the level: (A) for red, (C) for yellow, '' for green.
   function creditText(c) {
-    return c.level === 'red' ? creditRedText(c) : creditYellowText(c);
+    return c.level === 'red' ? creditCommentsText(c) : c.level === 'yellow' ? creditAeNote(c) : '';
   }
 
   function parseAuthorTable(table, corresponding) {
@@ -596,7 +629,7 @@
     parseJsArgs, parseJsCall, parsePercent, isMsNumber, msRevision, msColor, absUrl,
     classifyActionLink, detectEvaluateWarning, parseActionRow, msFromCell, findGrid, parseGrid,
     parseSimilarityPage, parseDuplicatePage, duplicatePageStats, summarizeDuplicates,
-    parseDetailsPage, splitRoles, onlyReviewEditing, CREDIT_ROLES, classifyRole, creditAuthor, creditAssessment, creditAuthorFlags, creditRedText, creditYellowText, creditText, parseAuthorStatusPage, parseFolders,
+    parseDetailsPage, splitRoles, onlyReviewEditing, CREDIT_ROLES, classifyRole, creditAuthor, creditAssessment, creditAuthorFlags, creditIssues, creditCommentsText, creditEmail, creditAeNote, creditText, parseAuthorStatusPage, parseFolders,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

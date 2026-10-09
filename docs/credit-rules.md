@@ -1,13 +1,13 @@
 # CRediT check — rules for the triage cockpit
 
 Implemented in `src/content/em-parse.js` (`classifyRole`, `creditAuthor`,
-`creditAssessment`, `creditAuthorFlags`, `creditRedText`, `creditYellowText`)
-and shown in `src/content/cockpit.js`. Test cases A–G are in
-`test/em-parse.test.js`.
-
-**Deviation from the original spec (Antonino's request, 2026-10-09):** the
-texts for the authors name the authors ("Author NAME is listed only under…")
-instead of using their order numbers ("Author 6").
+`creditAssessment`, `creditAuthorFlags`; message generator `creditIssues`,
+`creditCommentsText` (A), `creditEmail` (B), `creditAeNote` (C)) and shown in
+`src/content/cockpit.js` (Author Status panel: badge, one line per author,
+outputs with preview and Copy; the outputs not relevant to the level are
+under "Other texts"). The recipient name and signature of (B) are set in the
+extension popup. Test cases A–G and the golden texts of §7.5 are in
+`test/em-parse.test.js`. Texts name the authors, never their order numbers.
 
 Purpose: in the triage cockpit (Step 3 — Author Status), automatically classify the author contribution (CRediT) statement of a manuscript as GREEN / YELLOW / RED, explain why per author, and for RED prepare a clarification text. The extension only **reads and displays** — it never sends anything (see hard rules in `CLAUDE.md`).
 
@@ -89,32 +89,118 @@ Single-author papers: the author must have at least one SUBSTANTIVE role, otherw
 - A badge on the Author Status panel header: `CRediT: GREEN | YELLOW | RED`.
 - Under it, one line per author: order, name (as shown on the page, never stored outside chrome.storage), roles as small chips coloured by class (SUBSTANTIVE / WRITING / SUPPORT), and the flags in plain words, e.g. "no substantial contribution (writing only)", "support roles only", "no roles".
 - One line with paper-level notes: "No author credited with Writing – original draft".
-- For RED: a "Copy clarification text" button producing the text in §7 with the relevant authors filled in. For YELLOW: a "Copy note" button producing the short note in §7.
+- The texts of §7, each with its own Copy button (only those relevant to the level).
 - Pre-fill (do not tick) the Step 3 checklist item with the result; Antonino confirms it himself. (Implemented as the badge mirrored next to step 3, plus an "Insert CRediT text" button that appends the same text to the manuscript note.)
 
-## 7. Text templates (English, as sent to authors)
+## 7. Message generator (deterministic, no AI, all local)
 
-**RED — clarification request** (include only the paragraphs that apply):
+The cockpit generates ready-to-copy texts from the flags of §4–5. Same input → same text. Never paraphrase, never call any external service. Antonino copies the text himself; the extension never sends it.
+
+Three outputs, each with its own "Copy" button. Show only those relevant to the level:
+
+| Level | Outputs shown |
+|---|---|
+| RED | (A) Comments to authors · (B) Email to the Journal Manager (wraps A) |
+| YELLOW | (C) Note to the AE |
+| GREEN | none ("CRediT OK") |
+
+Antonino can still open the other outputs manually (e.g. (C) for a RED case he decides not to send back).
+
+### 7.1 Building the issue sentences (shared by A and C)
+
+This is a **template system, not an LLM**: every sentence below is fixed text with slots filled from the parsed data. Write in **plain, conversational prose** (no bullet points), always with the **authors' names and actual roles** — never generic placeholders, never "and/or".
+
+**Opening.** `We noticed an issue with the author contribution (CRediT) statement of your manuscript.` — use "some issues" when there is more than one issue (an issue = one group in step 1, `noOriginalDraft`, `allRoles` or `noRoles`).
+
+**Step 1 — authors without a substantial contribution (`noSubstantive`).** Group authors that have **exactly the same set of roles**. For each group build a clause:
+- one author: `{Name} is listed only under {roles}`
+- several authors: `{Name1}, {Name2} and {Name3} are listed only under {roles}`
+Join the clauses into one sentence: the first clause in full, the following ones with the verb omitted, the last introduced by ", and":
+- 1 group: `<NAME6> is listed only under "Writing – review & editing".`
+- 2 groups: `<NAME5> is listed only under "Funding acquisition" and "Resources", and <NAME6> only under "Writing – review & editing".`
+- 3+ groups: `A is listed only under …, B only under …, and C only under ….`
+`{roles}` = actual roles, each in double quotes, joined English-style (`"A"`, `"A" and "B"`, `"A", "B" and "C"`). Order groups by the lowest author order in the group.
+
+**Step 2 — `allRoles`** (only if `deficientCount ≥ 2`): `At the same time, {Name} is listed under almost all contributor roles, including {up to 2 SUPPORT roles held, quoted}.`
+
+**Step 3 — `noOriginalDraft`:** `In addition, no author is listed under "Writing – original draft".` (drop "In addition, " and capitalise if it is the only issue).
+
+**Step 4 — `noRoles`:** `No contributor roles are listed for {names}.` `noCredit` replaces everything with: `We noticed that the author contribution (CRediT) statement is missing.`
+
+Use the en dash in "Writing – original draft" and "Writing – review & editing". Names exactly as shown in Author Status.
+
+### 7.2 (A) Comments to authors — RED
+
+Two paragraphs. The **first** is built from the data (7.1: names and actual roles). The **second** is **fixed text** — no names, no variables — that restates the training criteria. Only two optional fixed sentences may be appended to it. This keeps the generator a simple template, with no grammar to compute.
 
 ```
-Before your manuscript can be considered further, please revise the author contribution (CRediT) statement, both in Editorial Manager and in the manuscript.
+{Opening} {sentences from 7.1}
 
-[if deficient authors] Author(s) {names} are listed only under {their roles, e.g. "Writing – review & editing" / "Funding acquisition and Resources"}. According to the journal's authorship criteria, each author must have made a substantial contribution to the conception or design of the work, or to the acquisition, analysis or interpretation of data, in addition to drafting or critically revising the manuscript. Please specify the substantial contribution of each of these authors or, if they do not meet the criteria, consider moving them to the Acknowledgements section.
-
-[if noOriginalDraft] No author is listed under "Writing – original draft". Please indicate which author(s) drafted the manuscript.
-
-[if an author has allRoles while others are deficient] Author {name} is listed under all contributor roles, including Supervision and Funding acquisition. Please verify that the roles are correctly assigned to each author.
-
-[if noRoles / noCredit] No contributor roles are provided for author(s) {names}. Please complete the CRediT statement for all authors.
+{FIXED_PARAGRAPH}{OPTIONAL_SENTENCES}
 ```
 
-**YELLOW — note** (for Antonino's own records, or for the custom letter to the AE when assigning):
+`FIXED_PARAGRAPH` (verbatim, always the same):
+```
+Authors are free to choose their CRediT roles, but these should reflect each author's actual contribution. According to the journal's authorship criteria, each author should have made a substantial contribution to the conception or design of the work, or to the acquisition, analysis or interpretation of data, and should have drafted the work or revised it critically for important intellectual content. Could you please check the contributor roles of all authors against these criteria and update the statement where needed, both in Editorial Manager and in the manuscript?
+```
+
+`OPTIONAL_SENTENCES` (verbatim, each preceded by a space, in this order, only if the flag is set):
+- `noOriginalDraft` → `Please also make sure that the author(s) who drafted the manuscript are listed under "Writing – original draft".` (not added when `noCredit`: the statement is missing altogether)
+- `noRoles` or `noCredit` → `Please also make sure that contributor roles are provided for all authors.`
+
+Never suggest moving authors to the Acknowledgements (Antonino's choice: keep the request neutral).
+
+### 7.3 (B) Email to the Journal Manager — RED
+
+Subject: `{MS} – Send back to authors (CRediT statement)`
 
 ```
-CRediT note: {e.g. "NAME has support roles only (Funding acquisition, Resources)" / "no author credited with Writing – original draft"}. Not blocking; the authors may be asked to complete the statement at revision.
+Dear Sami,
+
+During the initial assessment of manuscript {MS}, I noticed some issues with the author contribution (CRediT) statement. Could you please send the manuscript back to the authors with the comments below?
+
+---
+{text of (A)}
+---
+
+Once the authors resubmit, please assign the manuscript back to me.
+
+Thank you,
+Antonino
 ```
 
-## 8. Test cases (sanitized; in `test/em-parse.test.js`)
+The recipient name ("Sami") and signature are settings in the extension popup (default as above); the email address is not filled in by the extension.
+
+### 7.4 (C) Note to the AE — YELLOW (or RED not sent back)
+
+For the custom assignment letter (Assign Editor → "Confirm Selections and Send Custom Letters") or the Manuscript Notes:
+
+```
+A note on the CRediT statement, not blocking at triage: {sentences from 7.1, without the Opening}. It would be good to ask the authors to complete it at the first revision.
+```
+
+### 7.5 Examples (golden tests; names here are placeholders)
+
+Case B of §8 → RED, output (A):
+```
+We noticed some issues with the author contribution (CRediT) statement of your manuscript. <NAME5> is listed only under "Funding acquisition" and "Resources", and <NAME6> only under "Writing – review & editing". In addition, no author is listed under "Writing – original draft".
+
+Authors are free to choose their CRediT roles, but these should reflect each author's actual contribution. According to the journal's authorship criteria, each author should have made a substantial contribution to the conception or design of the work, or to the acquisition, analysis or interpretation of data, and should have drafted the work or revised it critically for important intellectual content. Could you please check the contributor roles of all authors against these criteria and update the statement where needed, both in Editorial Manager and in the manuscript? Please also make sure that the author(s) who drafted the manuscript are listed under "Writing – original draft".
+```
+
+Case A of §8 → RED, output (A):
+```
+We noticed some issues with the author contribution (CRediT) statement of your manuscript. <NAME2>, <NAME3>, <NAME4>, <NAME5> and <NAME6> are listed only under "Writing – review & editing". At the same time, <NAME1> is listed under almost all contributor roles, including "Funding acquisition" and "Supervision".
+
+Authors are free to choose their CRediT roles, but these should reflect each author's actual contribution. According to the journal's authorship criteria, each author should have made a substantial contribution to the conception or design of the work, or to the acquisition, analysis or interpretation of data, and should have drafted the work or revised it critically for important intellectual content. Could you please check the contributor roles of all authors against these criteria and update the statement where needed, both in Editorial Manager and in the manuscript?
+```
+
+Case D of §8 → YELLOW, output (C):
+```
+A note on the CRediT statement, not blocking at triage: <NAME5> is listed only under "Funding acquisition" and "Supervision". It would be good to ask the authors to complete it at the first revision.
+```
+
+## 8. Test cases (sanitized; use them as fixtures in `test/`)
 
 | Case | Authors and roles | Expected |
 |---|---|---|
