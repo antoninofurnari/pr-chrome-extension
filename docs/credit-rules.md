@@ -152,24 +152,26 @@ Never suggest moving authors to the Acknowledgements (Antonino's choice: keep th
 
 ### 7.3 (B) Email to the Journal Manager — RED
 
+Antonino's send-back template (Oct 2026: the Journal Manager performs the send back with the comments he receives). `{ISSUE_TOPIC}` = `author contribution (CRediT) statement`.
+
 Subject: `{MS} – Send back to authors (CRediT statement)`
 
 ```
-Dear Sami,
+Dear {JM_NAME},
 
-During the initial assessment of manuscript {MS}, I noticed some issues with the author contribution (CRediT) statement. Could you please send the manuscript back to the authors with the comments below?
+During the initial assessment of manuscript {MS_NUMBER}, I noticed an issue with the {ISSUE_TOPIC} that should be addressed before the manuscript can proceed to peer review. Could you please send it back to the authors with the comments below?
 
+--- Comments to authors ---
+{AUTHOR_MESSAGE = text of (A)}
 ---
-{text of (A)}
----
 
-Once the authors resubmit, please assign the manuscript back to me.
+Once the authors resubmit, please assign the manuscript back to me so that I can complete the assessment.
 
-Thank you,
-Antonino
+Thank you very much,
+{SIGNATURE}
 ```
 
-The recipient name ("Sami") and signature are settings in the extension popup (default as above); the email address is not filled in by the extension.
+`{JM_NAME}`, the recipient email and `{SIGNATURE}` are settings in the extension popup (defaults: Sami, the Journal Manager's address, Antonino). The **"Open email draft"** button opens a new email in Antonino's mail program through a `mailto:` link (To, Subject and Body filled in) and also copies the body, in case the mail program truncates long `mailto:` links. Nothing is sent by the extension: Antonino reviews and sends the email himself.
 
 ### 7.4 (C) Note to the AE — YELLOW (or RED not sent back)
 

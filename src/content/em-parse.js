@@ -553,15 +553,27 @@
     return first + '\n\n' + second;
   }
 
+  // Send-back email to the Journal Manager (Antonino's template). The JM
+  // performs the send back with the comments; topic = what must be fixed.
+  function sendBackEmail(ms, topic, subjectTopic, comments, opts) {
+    const o = Object.assign({ recipient: 'Sami', signature: 'Antonino' }, opts);
+    return {
+      subject: `${ms} – Send back to authors (${subjectTopic})`,
+      body: `Dear ${o.recipient},\n\nDuring the initial assessment of manuscript ${ms}, I noticed an issue with the ${topic} that should be addressed before the manuscript can proceed to peer review. Could you please send it back to the authors with the comments below?\n\n--- Comments to authors ---\n${comments}\n---\n\nOnce the authors resubmit, please assign the manuscript back to me so that I can complete the assessment.\n\nThank you very much,\n${o.signature}`,
+    };
+  }
+
   // (B) Email to the Journal Manager — RED (wraps A).
   function creditEmail(c, ms, opts) {
-    const o = Object.assign({ recipient: 'Sami', signature: 'Antonino' }, opts);
     const a = creditCommentsText(c);
     if (!a) return null;
-    return {
-      subject: `${ms} – Send back to authors (CRediT statement)`,
-      body: `Dear ${o.recipient},\n\nDuring the initial assessment of manuscript ${ms}, I noticed some issues with the author contribution (CRediT) statement. Could you please send the manuscript back to the authors with the comments below?\n\n---\n${a}\n---\n\nOnce the authors resubmit, please assign the manuscript back to me.\n\nThank you,\n${o.signature}`,
-    };
+    return sendBackEmail(ms, 'author contribution (CRediT) statement', 'CRediT statement', a, opts);
+  }
+
+  // mailto: link that opens a draft in Antonino's mail program (nothing is sent).
+  function mailtoUrl(to, subject, body) {
+    const q = encodeURIComponent;
+    return `mailto:${q(to || '').replace(/%40/g, '@')}?subject=${q(subject)}&body=${q(body.replace(/\r?\n/g, '\r\n'))}`;
   }
 
   // (C) Note to the AE — YELLOW (or a RED case not sent back).
@@ -629,7 +641,7 @@
     parseJsArgs, parseJsCall, parsePercent, isMsNumber, msRevision, msColor, absUrl,
     classifyActionLink, detectEvaluateWarning, parseActionRow, msFromCell, findGrid, parseGrid,
     parseSimilarityPage, parseDuplicatePage, duplicatePageStats, summarizeDuplicates,
-    parseDetailsPage, splitRoles, onlyReviewEditing, CREDIT_ROLES, classifyRole, creditAuthor, creditAssessment, creditAuthorFlags, creditIssues, creditCommentsText, creditEmail, creditAeNote, creditText, parseAuthorStatusPage, parseFolders,
+    parseDetailsPage, splitRoles, onlyReviewEditing, CREDIT_ROLES, classifyRole, creditAuthor, creditAssessment, creditAuthorFlags, creditIssues, creditCommentsText, sendBackEmail, creditEmail, mailtoUrl, creditAeNote, creditText, parseAuthorStatusPage, parseFolders,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

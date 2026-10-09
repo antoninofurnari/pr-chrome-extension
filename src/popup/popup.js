@@ -51,9 +51,10 @@ $('file').addEventListener('change', async () => {
 
 $('dev').addEventListener('change', () => S.setDev($('dev').checked));
 
-S.getSettings().then((o) => { $('recipient').value = o.recipient; $('signature').value = o.signature; });
-for (const id of ['recipient', 'signature']) {
-  $(id).addEventListener('input', () => S.setSettings({ recipient: $('recipient').value.trim(), signature: $('signature').value.trim() }));
+const SETTINGS = ['recipient', 'recipientEmail', 'signature'];
+S.getSettings().then((o) => { for (const id of SETTINGS) $(id).value = o[id]; });
+for (const id of SETTINGS) {
+  $(id).addEventListener('input', () => S.setSettings({ [id]: $(id).value.trim() }));
 }
 
 refresh();

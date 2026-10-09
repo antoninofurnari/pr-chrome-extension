@@ -79,16 +79,18 @@
   }
 
   // Settings for the CRediT email to the Journal Manager (popup).
-  const SETTINGS_DEFAULTS = { recipient: 'Sami', signature: 'Antonino' };
+  const SETTINGS_DEFAULTS = { recipient: 'Sami', recipientEmail: 'c.samiullah@elsevier.com', signature: 'Antonino' };
+  const SETTING_KEYS = Object.keys(SETTINGS_DEFAULTS);
   async function getSettings() {
-    const r = await chrome.storage.local.get(['preh:recipient', 'preh:signature']);
-    return {
-      recipient: r['preh:recipient'] || SETTINGS_DEFAULTS.recipient,
-      signature: r['preh:signature'] || SETTINGS_DEFAULTS.signature,
-    };
+    const r = await chrome.storage.local.get(SETTING_KEYS.map((k) => 'preh:' + k));
+    const out = {};
+    for (const k of SETTING_KEYS) out[k] = r['preh:' + k] || SETTINGS_DEFAULTS[k];
+    return out;
   }
   async function setSettings(o) {
-    await chrome.storage.local.set({ 'preh:recipient': o.recipient, 'preh:signature': o.signature });
+    const set = {};
+    for (const k of SETTING_KEYS) if (k in o) set['preh:' + k] = o[k];
+    await chrome.storage.local.set(set);
   }
 
   async function isDev() {

@@ -126,15 +126,22 @@ test('CRediT case B -> RED + noOriginalDraft, golden (A)', () => {
     FIXED + ' Please also make sure that the author(s) who drafted the manuscript are listed under "Writing – original draft".');
 });
 
-test('CRediT case B -> (B) email wraps (A)', () => {
+test('CRediT case B -> (B) email wraps (A), Antonino\'s template', () => {
   const c = credit(caseB());
   const e = P.creditEmail(c, '<MS>');
   assert.equal(e.subject, '<MS> – Send back to authors (CRediT statement)');
-  assert.ok(e.body.startsWith('Dear Sami,\n\nDuring the initial assessment of manuscript <MS>, I noticed some issues with the author contribution (CRediT) statement. Could you please send the manuscript back to the authors with the comments below?\n\n---\n'));
-  assert.ok(e.body.includes('---\n' + P.creditCommentsText(c) + '\n---\n'));
-  assert.ok(e.body.endsWith('\n\nOnce the authors resubmit, please assign the manuscript back to me.\n\nThank you,\nAntonino'));
+  assert.equal(e.body,
+    'Dear Sami,\n\nDuring the initial assessment of manuscript <MS>, I noticed an issue with the author contribution (CRediT) statement that should be addressed before the manuscript can proceed to peer review. Could you please send it back to the authors with the comments below?\n\n' +
+    '--- Comments to authors ---\n' + P.creditCommentsText(c) + '\n---\n\n' +
+    'Once the authors resubmit, please assign the manuscript back to me so that I can complete the assessment.\n\nThank you very much,\nAntonino');
   const e2 = P.creditEmail(c, '<MS>', { recipient: 'X', signature: 'Y' });
-  assert.ok(e2.body.startsWith('Dear X,') && e2.body.endsWith('Thank you,\nY'));
+  assert.ok(e2.body.startsWith('Dear X,') && e2.body.endsWith('Thank you very much,\nY'));
+});
+
+test('mailtoUrl: address, subject and body encoded, CRLF line breaks', () => {
+  const u = P.mailtoUrl('jm@example.org', 'A – B (C)', 'Dear X,\n\n"quoted" & 100%');
+  assert.equal(u, 'mailto:jm@example.org?subject=A%20%E2%80%93%20B%20(C)&body=Dear%20X%2C%0D%0A%0D%0A%22quoted%22%20%26%20100%25');
+  assert.ok(P.mailtoUrl('', 's', 'b').startsWith('mailto:?subject='));
 });
 
 test('CRediT case C -> GREEN, no texts', () => {

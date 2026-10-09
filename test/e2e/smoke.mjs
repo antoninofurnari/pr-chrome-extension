@@ -122,7 +122,8 @@ await popup.waitForFunction(() => document.getElementById('count').textContent =
 check(true, 'F3: popup counts 1 record');
 await popup.waitForFunction(() => /^\d+$/.test(document.getElementById('build').textContent));
 check(true, 'popup shows the build stamp');
-check(await popup.inputValue('#recipient') === 'Sami' && await popup.inputValue('#signature') === 'Antonino', 'popup: email settings defaults');
+check(await popup.inputValue('#recipient') === 'Sami' && await popup.inputValue('#recipientEmail') === 'c.samiullah@elsevier.com' &&
+  await popup.inputValue('#signature') === 'Antonino', 'popup: email settings defaults');
 const [download] = await Promise.all([popup.waitForEvent('download'), popup.click('#export')]);
 const exported = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
 check(exported.format === 'preh-notes-v1' && exported.records['PR-D-26-00001'].note === 'synthetic note', 'F3: export contains the record');
@@ -200,7 +201,13 @@ check(/preh-sum-bad/.test(await sum('Author Status').getAttribute('class')), 'CR
   await outB.locator('button', { hasText: /^Copy$/ }).click();
   await tp.waitForTimeout(300);
   const mail = await tp.evaluate(() => navigator.clipboard.readText());
-  check(mail.startsWith('Dear Sami,\n\nDuring the initial assessment of manuscript PR-D-26-00001') && mail.includes('---\n' + clip + '\n---') && mail.endsWith('Thank you,\nAntonino'), 'CRediT: (B) email wraps (A)');
+  check(mail.startsWith('Dear Sami,\n\nDuring the initial assessment of manuscript PR-D-26-00001, I noticed an issue with the author contribution (CRediT) statement') &&
+    mail.includes('--- Comments to authors ---\n' + clip + '\n---') && mail.endsWith('Thank you very much,\nAntonino'), 'CRediT: (B) email wraps (A)');
+  await tp.evaluate(() => navigator.clipboard.writeText(''));
+  await outB.locator('button', { hasText: 'Open email draft' }).click();
+  await tp.waitForTimeout(500);
+  check(await tp.evaluate(() => navigator.clipboard.readText()) === mail &&
+    await outB.locator('button', { hasText: 'Draft opened' }).count() === 1, 'CRediT: Open email draft (mailto) also copies the body');
   check(!(await det.locator('.preh-credit-other .preh-credit-out', { hasText: '(C) Note to the AE' }).isVisible()), 'CRediT: (C) available under "Other texts" (closed)');
 }
 check(await tp.frame({ name: 'preh-authors' }).url().includes('ContributingAuthorStatus.aspx'), 'M2: author panel shows Author Status');

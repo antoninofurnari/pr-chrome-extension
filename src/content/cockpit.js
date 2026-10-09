@@ -175,6 +175,25 @@
 
   // One line per author (roles as chips coloured by class, flags in words),
   // paper-level notes, and the text to copy (red: clarification, yellow: note).
+  // Opens a draft in Antonino's mail program (mailto:) with recipient, subject
+  // and body filled in; he reviews and sends it himself. The body is also
+  // copied, in case the mail program truncates long mailto links.
+  function draftButton(getEmail) {
+    const b = el('button', 'preh-btn preh-draft', 'Open email draft');
+    b.type = 'button';
+    b.title = 'Opens a new email in your mail program (nothing is sent). The body is also copied to the clipboard.';
+    b.addEventListener('click', async () => {
+      const [e, o] = await Promise.all([getEmail(), S.getSettings()]);
+      navigator.clipboard.writeText(e.body).catch(() => {});
+      const a = document.createElement('a');
+      a.href = P.mailtoUrl(o.recipientEmail, e.subject, e.body);
+      a.click();
+      b.textContent = 'Draft opened · body copied';
+      setTimeout(() => { b.textContent = 'Open email draft'; }, 2000);
+    });
+    return b;
+  }
+
   // One output of the message generator: title, Copy button(s), read-only preview.
   function creditOutput(title, text, extraButtons) {
     const box = el('div', 'preh-credit-out');
@@ -213,7 +232,7 @@
     const outputs = {
       A: () => creditOutput('(A) Comments to authors', () => P.creditCommentsText(c)),
       B: () => creditOutput('(B) Email to the Journal Manager', () => email().then((e) => e.body),
-        [copyButton('Copy subject', () => email().then((e) => e.subject))]),
+        [draftButton(email), copyButton('Copy subject', () => email().then((e) => e.subject))]),
       C: () => creditOutput('(C) Note to the AE', () => P.creditAeNote(c)),
     };
     const shown = c.level === 'red' ? ['A', 'B'] : ['C'];
