@@ -81,3 +81,38 @@ test('summarizeDuplicates: repeated candidates count once', () => {
   assert.deepEqual(s.flagged, ['a']);
   assert.equal(s.maxTitle, 90);
 });
+
+const A = (name, roles) => ({ name, roles, onlyReviewEditing: P.onlyReviewEditing(roles), noRoles: roles.length === 0 });
+const RE = 'Writing – review & editing';
+const OD = 'Writing – original draft';
+
+test('CRediT: one author does everything, others only review & editing -> bad', () => {
+  const c = P.creditAssessment([A('A', ['Conceptualization', OD, 'Software']), A('B', [RE]), A('C', [RE]), A('D', [RE])]);
+  assert.equal(c.level, 'bad');
+  assert.deepEqual(c.weak, ['B', 'C', 'D']);
+  assert.match(P.creditNoteText(c), /3 of the 4 authors \(B, C, D\)/);
+  assert.match(P.creditNoteText(c), /Please review the contributor roles/);
+});
+
+test('CRediT: author with no role -> bad', () => {
+  assert.equal(P.creditAssessment([A('A', [OD]), A('B', [])]).level, 'bad');
+});
+
+test('CRediT: single review-only author, no original draft -> warn', () => {
+  const c = P.creditAssessment([A('A', ['Methodology']), A('B', ['Software']), A('C', [RE])]);
+  assert.equal(c.level, 'warn');
+  assert.deepEqual(c.reasons, ['1 only review & editing', 'no original draft']);
+  assert.match(P.creditNoteText(c), /Please check that the contributor roles are complete/);
+});
+
+test('CRediT: senior with only supervision/funding -> warn', () => {
+  const c = P.creditAssessment([A('A', [OD, 'Methodology']), A('B', ['Supervision', 'Funding acquisition'])]);
+  assert.equal(c.level, 'warn');
+  assert.deepEqual(c.seniorOnly, ['B']);
+});
+
+test('CRediT: everything else -> ok, no note', () => {
+  const c = P.creditAssessment([A('A', [OD, 'Methodology']), A('B', ['Software', RE])]);
+  assert.equal(c.level, 'ok');
+  assert.equal(P.creditNoteText(c), '');
+});

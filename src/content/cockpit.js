@@ -174,13 +174,11 @@
       try { doc = f.contentDocument; } catch (_) { /* not same-origin */ }
       if (!doc || !doc.querySelector('table#CorrAuthorGridView, table#OtherAuthorsGridView')) return;
       const authors = P.parseAuthorStatusPage(doc);
-      const weak = authors.filter((a) => a.onlyReviewEditing);
-      const none = authors.filter((a) => a.noRoles);
-      const parts = [authors.length + ' authors'];
-      if (weak.length) parts.push(weak.length + ' only review & editing');
-      if (none.length) parts.push(none.length + ' without roles');
+      const credit = P.creditAssessment(authors);
+      p.summary.credit = credit; // read by the checklist's "Insert CRediT note"
+      const text = authors.length + ' authors · CRediT ' + (credit.reasons.length ? credit.reasons.join(', ') : 'OK');
       const lines = authors.map((a) => `${a.order}. ${a.name}: ${a.roles.length ? a.roles.join(', ') : '(no roles)'}`);
-      setSummary(p.summary, parts.join(' · '), weak.length || none.length ? 'bad' : 'ok', lines.join('\n'));
+      setSummary(p.summary, text, credit.level, lines.join('\n'));
     });
     p.body.append(f);
     fetchDoc(url).then((doc) => {
@@ -230,14 +228,14 @@
       ['s1_scope', 'In scope, correct article type (else Reject + offer transfer)'],
       ['s1_article', 'Looks like a scientific article: abstract, English, sections, length (else Reject, no transfer)'],
       ['s1_skim', 'PDF skim: setup, results, no duplicated figures, no AI prompts, no tortured phrases, no citation stacking'],
-      ['s1_sections', 'Final sections: CRediT, competing interests, gen-AI disclosure (if used), ethics (data on people). Missing → send back'],
+      ['s1_sections', 'Final sections: CRediT, competing interests (often a separate file: check Details → Attachments before marking it missing), gen-AI disclosure (if used), ethics (data on people). Missing → send back'],
     ]],
     ['2 · Duplicate check', 'dup', [
       ['s2_dup', 'EM score ≤ 50% and no title/abstract > 70%. Else Details of old MS → Editors: ME "Reject - invitation to resubmit" without reviewers = OK; same paper / under review → Reject (ethics)'],
     ]],
     ['3 · Author Status', 'authors', [
       ['s3_names', 'Names and order match the PDF, emails plausible, affiliations consistent'],
-      ['s3_roles', 'Every author has a substantial role (only "Writing – review & editing" → send back). "No Response" is fine'],
+      ['s3_roles', 'CRediT (light): red = 2+ co-authors with only "Writing – review & editing" or an author without roles → ask the authors; yellow = no original draft, senior with only funding/supervision/resources, or one review-only author → at most a note. "No Response" is fine'],
     ]],
     ['4 · Evaluate Manuscript', 'evaluate', [
       ['s4_eval', 'Only if warning icon: same paper + same authors → Reject (ethics); different authors → report to Publisher'],
@@ -285,6 +283,7 @@
         label.append(box, el('span', null, text));
         step.append(label);
       }
+      if (key === 'authors' && src) step.append(creditButton(src, () => notes, () => saveNotes()));
       drawer.append(step);
     }
 
@@ -330,6 +329,24 @@
 
     updateProgress();
     return { drawer, flush: saveNotes, status, notes };
+  }
+
+  // Appends the standard CRediT text (problem + policy) to the manuscript note.
+  function creditButton(summary, getNotes, save) {
+    const b = el('button', 'preh-btn preh-credit-btn', 'Insert CRediT note');
+    b.type = 'button';
+    b.title = 'Append a standard text about the CRediT roles (problem and policy) to the note';
+    b.addEventListener('click', () => {
+      const flash = (t) => { b.textContent = t; setTimeout(() => { b.textContent = 'Insert CRediT note'; }, 1500); };
+      if (!summary.credit) return flash('Author Status not loaded yet');
+      const text = P.creditNoteText(summary.credit);
+      if (!text) return flash('Nothing to report');
+      const notes = getNotes();
+      notes.value = notes.value.trim() ? notes.value.replace(/\s+$/, '') + '\n\n' + text : text;
+      save();
+      flash('Added to the note');
+    });
+    return b;
   }
 
   function statusSelect(value, onChange) {

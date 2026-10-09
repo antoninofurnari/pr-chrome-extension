@@ -70,13 +70,17 @@ Antonino's operative workflow, in order. The checklist in the cockpit mirrors it
 
 **Step 3 — Details → Author Status:**
 - Names and order match the PDF; emails plausible for the names; affiliations consistent with the topic.
-- Each author has at least one substantial contribution role (not only "Writing – review & editing") → otherwise note for send back. "Confirmed? No Response" is not a problem.
+- CRediT check (light; agreed with the journal's Senior Journal Manager: authors choose roles freely, the editor intervenes only with concrete doubts). Implemented in `creditAssessment()` (em-parse.js) as a traffic light on the Author Status panel and next to checklist step 3, with an "Insert CRediT note" button that appends a standard text (problem + policy) to the manuscript note:
+  - red → ask for clarification: 2+ co-authors with only "Writing – review & editing" (one author does everything), or an author with no role;
+  - yellow → fine, at most a note: nobody has "Writing – original draft", a senior has only Funding acquisition / Supervision / Resources, or a single author has only review & editing;
+  - green → everything else. "Confirmed? No Response" is not a problem.
+- Declaration of competing interests: before marking it missing, check Details → Attachments (it is often a separate file).
 
 **Step 4 — Evaluate Manuscript:** only if the warning icon is present.
 - Same paper at another Elsevier journal with the same authors → Reject (ethics).
 - Different authors → report to the Publisher.
 
-**Step 5 — Decide:** Reject (Potential ethics concern) / Reject and offer transfer / Send back to author (with the noted items; for now via the Managing Editor) / Assign Editor.
+**Step 5 — Decide:** Reject (Potential ethics concern) / Reject and offer transfer / Send back to author (send the comments to the Senior Journal Manager, who performs the send back; alternatively "Reject – invitation to resubmit") / Assign Editor.
 
 ## Features and UX
 

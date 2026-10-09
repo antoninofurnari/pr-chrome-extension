@@ -378,6 +378,56 @@
     return roles.every((r) => /^writing\s*[-–—]\s*review\s*(&|and)\s*editing$/i.test(r));
   }
 
+  // CRediT check (light), agreed with the journal manager: authors choose
+  // their roles freely and the editor only asks when there is a concrete doubt.
+  //   bad  — 2+ co-authors with only "Writing – review & editing" (one author
+  //          does everything), or an author with no role at all;
+  //   warn — at most a note: nobody has "Writing – original draft", an author
+  //          has only Funding acquisition / Supervision / Resources, or a
+  //          single author has only review & editing;
+  //   ok   — everything else.
+  const SENIOR_ONLY = /^(funding acquisition|supervision|resources)$/i;
+  const ORIGINAL_DRAFT = /^writing\s*[-–—]\s*original\s*draft$/i;
+
+  function creditAssessment(authors) {
+    const weak = authors.filter((a) => a.onlyReviewEditing).map((a) => a.name);
+    const none = authors.filter((a) => a.noRoles).map((a) => a.name);
+    const seniorOnly = authors.filter((a) => a.roles.length && a.roles.every((r) => SENIOR_ONLY.test(r))).map((a) => a.name);
+    const noOriginalDraft = authors.length > 0 && !authors.some((a) => a.roles.some((r) => ORIGINAL_DRAFT.test(r)));
+    const reasons = [];
+    if (weak.length >= 2) reasons.push(weak.length + ' only review & editing');
+    if (none.length) reasons.push(none.length + ' without roles');
+    const bad = reasons.length > 0;
+    if (!bad && weak.length === 1) reasons.push('1 only review & editing');
+    if (noOriginalDraft) reasons.push('no original draft');
+    if (seniorOnly.length) reasons.push(seniorOnly.length + ' only funding/supervision/resources');
+    return {
+      level: bad ? 'bad' : reasons.length ? 'warn' : 'ok',
+      reasons, weak, none, seniorOnly, noOriginalDraft, count: authors.length,
+    };
+  }
+
+  // Standard text for the manuscript note (to be sent back to the authors).
+  // Empty when there is nothing to report.
+  function creditNoteText(c) {
+    if (c.level === 'ok') return '';
+    const list = (names) => names.join(', ');
+    const lines = ['CRediT author contributions:'];
+    if (c.weak.length >= 2) {
+      lines.push(`- ${c.weak.length} of the ${c.count} authors (${list(c.weak)}) are listed only under "Writing – review & editing", with no other contribution role.`);
+    } else if (c.weak.length === 1) {
+      lines.push(`- ${c.weak[0]} is listed only under "Writing – review & editing".`);
+    }
+    if (c.none.length) lines.push(`- No contribution role is given for ${list(c.none)}.`);
+    if (c.noOriginalDraft) lines.push('- No author is listed under "Writing – original draft".');
+    if (c.seniorOnly.length) lines.push(`- ${list(c.seniorOnly)}: only Funding acquisition, Supervision and/or Resources.`);
+    lines.push('Authors are free to choose their CRediT roles, which should reflect each author\'s actual contribution; authorship requires a substantial contribution to the work. ' +
+      (c.level === 'bad'
+        ? 'Please review the contributor roles of all authors and update them, or clarify the contribution of the authors listed above.'
+        : 'Please check that the contributor roles are complete.'));
+    return lines.join('\n');
+  }
+
   function parseAuthorTable(table, corresponding) {
     if (!table) return [];
     const headers = Array.from(table.querySelectorAll('tr th')).map(cleanText);
@@ -428,7 +478,7 @@
     parseJsArgs, parseJsCall, parsePercent, isMsNumber, msRevision, absUrl,
     classifyActionLink, detectEvaluateWarning, parseActionRow, msFromCell, findGrid, parseGrid,
     parseSimilarityPage, parseDuplicatePage, duplicatePageStats, summarizeDuplicates,
-    parseDetailsPage, splitRoles, onlyReviewEditing, parseAuthorStatusPage, parseFolders,
+    parseDetailsPage, splitRoles, onlyReviewEditing, creditAssessment, creditNoteText, parseAuthorStatusPage, parseFolders,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
