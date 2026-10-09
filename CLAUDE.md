@@ -70,10 +70,7 @@ Antonino's operative workflow, in order. The checklist in the cockpit mirrors it
 
 **Step 3 — Details → Author Status:**
 - Names and order match the PDF; emails plausible for the names; affiliations consistent with the topic.
-- CRediT check (light; agreed with the journal's Senior Journal Manager: authors choose roles freely, the editor intervenes only with concrete doubts). Implemented in `creditAssessment()` (em-parse.js) as a traffic light on the Author Status panel and next to checklist step 3, with an "Insert CRediT note" button that appends a standard text (problem + policy) to the manuscript note:
-  - red → ask for clarification: 2+ co-authors with only "Writing – review & editing" (one author does everything), or an author with no role;
-  - yellow → fine, at most a note: nobody has "Writing – original draft", a senior has only Funding acquisition / Supervision / Resources, or a single author has only review & editing;
-  - green → everything else. "Confirmed? No Response" is not a problem.
+- CRediT check: graded GREEN / YELLOW / RED per **`docs/credit-rules.md`** (Elsevier training + Journal Manager's clarification). Shown on the Author Status panel (badge, one line per author with role chips and flags, Copy clarification text / Copy note) and next to checklist step 3 ("Insert CRediT text" appends the same text to the manuscript note). Texts name the authors, not their order numbers. "Confirmed? No Response" is not a problem.
 - Declaration of competing interests: before marking it missing, check Details → Attachments (it is often a separate file).
 
 **Step 4 — Evaluate Manuscript:** only if the warning icon is present.
@@ -97,7 +94,7 @@ Antonino's operative workflow, in order. The checklist in the cockpit mirrors it
 ### F2. Triage cockpit
 - A "Triage" button on each row (next to the badge) opens a **new tab** (one per manuscript, so several triages can be open) on EM's `default2.aspx`, where the cockpit is a full-viewport overlay in the top window:
   - the row payload goes through `chrome.storage.local` (`preh:open:<token>`, purged after 7 days) and the token through the new window's name (`prehtab:<token>`, opened with `noopener`), so nothing about the manuscript is in the URL and a reload reopens the same cockpit;
-  - header bar with MS number, status selector, "Close tab" button (Esc does nothing in a triage tab); the bar colour is derived from the MS number and the tab title is the MS number, to tell tabs apart;
+  - header bar with MS number, status selector, "Close tab" button (Esc does nothing in a triage tab); the bar colour is derived from the MS number (`msColor`, also used for the row's Triage button on the list) and the tab title is the MS number, to tell tabs apart;
   - **left ~55%**: Similarity report.
     - Load `DotNetPopUps/SimilarityCheckResults.aspx?...` in an iframe, find the "Completed" link, extract `APISubmissionID` and load `CrossCheckResults.aspx?...` in the same iframe.
     - If Turnitin refuses framing, show a button "Open report (left half)" that opens a popup sized and positioned on the left half.
@@ -133,6 +130,7 @@ src/
   storage.js             wrapper around chrome.storage.local
 docs/
   em-structure.md        page structure (source of truth for selectors)
+  credit-rules.md        CRediT GREEN/YELLOW/RED rules and text templates (step 3)
 test/
   fixtures/              synthetic/sanitized HTML only
   em-parse.test.js       node --test, no dependencies

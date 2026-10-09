@@ -161,6 +161,40 @@
     return p.box;
   }
 
+  const CREDIT_LEVEL = { red: 'bad', yellow: 'warn', green: 'ok' };
+
+  function copyButton(label, getText) {
+    const b = el('button', 'preh-btn preh-copy', label);
+    b.type = 'button';
+    b.addEventListener('click', () => {
+      const t = getText();
+      const done = () => { b.textContent = 'Copied'; setTimeout(() => { b.textContent = label; }, 1200); };
+      navigator.clipboard.writeText(t).then(done, () => {});
+    });
+    return b;
+  }
+
+  // One line per author (roles as chips coloured by class, flags in words),
+  // paper-level notes, and the text to copy (red: clarification, yellow: note).
+  function creditDetails(c) {
+    const box = el('details', 'preh-credit');
+    box.open = c.level !== 'green';
+    box.append(el('summary', null, 'CRediT details (' + c.level.toUpperCase() + ')'));
+    for (const a of c.authors) {
+      const row = el('div', 'preh-credit-row' + (a.noRoles || a.noSubstantive ? ' preh-credit-deficient' : ''));
+      row.append(el('span', 'preh-credit-name', `${a.order}. ${a.name}`));
+      for (const r of a.roles) row.append(el('span', 'preh-role preh-role-' + r.cls, r.name));
+      const flags = P.creditAuthorFlags(a);
+      if (flags.length) row.append(el('span', 'preh-credit-flags', flags.join(' · ')));
+      box.append(row);
+    }
+    if (c.noOriginalDraft && !c.noCredit) box.append(el('div', 'preh-credit-paper', 'No author credited with Writing – original draft'));
+    if (c.level !== 'green') {
+      box.append(copyButton(c.level === 'red' ? 'Copy clarification text' : 'Copy note', () => P.creditText(c)));
+    }
+    return box;
+  }
+
   function authorPanel(d) {
     const p = panel('Author Status');
     p.summary.dataset.key = 'authors';
@@ -177,10 +211,13 @@
       if (!doc || !doc.querySelector('table#CorrAuthorGridView, table#OtherAuthorsGridView')) return;
       const authors = P.parseAuthorStatusPage(doc);
       const credit = P.creditAssessment(authors);
-      p.summary.credit = credit; // read by the checklist's "Insert CRediT note"
-      const text = authors.length + ' authors · CRediT ' + (credit.reasons.length ? credit.reasons.join(', ') : 'OK');
-      const lines = authors.map((a) => `${a.order}. ${a.name}: ${a.roles.length ? a.roles.join(', ') : '(no roles)'}`);
-      setSummary(p.summary, text, credit.level, lines.join('\n'));
+      p.summary.credit = credit; // read by the checklist's "Insert CRediT text"
+      const text = 'CRediT: ' + credit.level.toUpperCase() + ' · ' + authors.length + ' authors' +
+        (credit.reasons.length ? ' · ' + credit.reasons.join(' · ') : '');
+      setSummary(p.summary, text, CREDIT_LEVEL[credit.level], 'See the CRediT details at the top of the panel');
+      const old = p.body.querySelector('.preh-credit');
+      if (old) old.remove();
+      p.body.insertBefore(creditDetails(credit), f);
     });
     p.body.append(f);
     fetchDoc(url).then((doc) => {
@@ -237,7 +274,7 @@
     ]],
     ['3 · Author Status', 'authors', [
       ['s3_names', 'Names and order match the PDF, emails plausible, affiliations consistent'],
-      ['s3_roles', 'CRediT (light): red = 2+ co-authors with only "Writing – review & editing" or an author without roles → ask the authors; yellow = no original draft, senior with only funding/supervision/resources, or one review-only author → at most a note. "No Response" is fine'],
+      ['s3_roles', 'CRediT: every author needs a substantial role (not only writing or support roles). RED (no statement, an author without roles, 2+ without substantial contribution) → clarification via the Journal Manager; YELLOW (one such author, or no original draft) → at most a note. "No Response" is fine'],
     ]],
     ['4 · Evaluate Manuscript', 'evaluate', [
       ['s4_eval', 'Only if warning icon: same paper + same authors → Reject (ethics); different authors → report to Publisher'],
@@ -335,13 +372,13 @@
 
   // Appends the standard CRediT text (problem + policy) to the manuscript note.
   function creditButton(summary, getNotes, save) {
-    const b = el('button', 'preh-btn preh-credit-btn', 'Insert CRediT note');
+    const b = el('button', 'preh-btn preh-credit-btn', 'Insert CRediT text');
     b.type = 'button';
     b.title = 'Append a standard text about the CRediT roles (problem and policy) to the note';
     b.addEventListener('click', () => {
-      const flash = (t) => { b.textContent = t; setTimeout(() => { b.textContent = 'Insert CRediT note'; }, 1500); };
+      const flash = (t) => { b.textContent = t; setTimeout(() => { b.textContent = 'Insert CRediT text'; }, 1500); };
       if (!summary.credit) return flash('Author Status not loaded yet');
-      const text = P.creditNoteText(summary.credit);
+      const text = P.creditText(summary.credit);
       if (!text) return flash('Nothing to report');
       const notes = getNotes();
       notes.value = notes.value.trim() ? notes.value.replace(/\s+$/, '') + '\n\n' + text : text;
@@ -408,13 +445,6 @@
 
   let tabMode = false; // the cockpit is the whole tab: Esc must not close it by accident
 
-  // Same manuscript -> same colour, so several triage tabs are easy to tell apart.
-  function msColor(ms) {
-    let h = 0;
-    for (const ch of ms) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    return `hsl(${h % 360}, 55%, 30%)`;
-  }
-
   function onKey(e) {
     if (tabMode) return;
     if (e.key === 'Escape') close();
@@ -451,7 +481,7 @@
 
     // header
     const head = el('div', 'preh-cockpit-bar');
-    head.style.background = msColor(d.ms);
+    head.style.background = P.msColor(d.ms);
     head.append(el('strong', 'preh-cockpit-ms', d.ms));
     if (d.revision > 0) head.append(el('span', 'preh-sum preh-sum-bad', 'Revision R' + d.revision + ': reassign to previous AE'));
     if (d.similarityPct != null) head.append(el('span', 'preh-cockpit-meta', 'Similarity ' + d.similarityPct + '%'));

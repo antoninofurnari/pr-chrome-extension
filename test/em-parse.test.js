@@ -82,37 +82,99 @@ test('summarizeDuplicates: repeated candidates count once', () => {
   assert.equal(s.maxTitle, 90);
 });
 
-const A = (name, roles) => ({ name, roles, onlyReviewEditing: P.onlyReviewEditing(roles), noRoles: roles.length === 0 });
+// ---- CRediT (docs/credit-rules.md, test cases A–G) ----
+const ALL = P.CREDIT_ROLES.map(([n]) => n);
 const RE = 'Writing – review & editing';
 const OD = 'Writing – original draft';
+const au = (order, roles, name) => ({ order: String(order), name: name || 'NAME ' + order, roles });
+const credit = (list) => P.creditAssessment(list);
 
-test('CRediT: one author does everything, others only review & editing -> bad', () => {
-  const c = P.creditAssessment([A('A', ['Conceptualization', OD, 'Software']), A('B', [RE]), A('C', [RE]), A('D', [RE])]);
-  assert.equal(c.level, 'bad');
-  assert.deepEqual(c.weak, ['B', 'C', 'D']);
-  assert.match(P.creditNoteText(c), /3 of the 4 authors \(B, C, D\)/);
-  assert.match(P.creditNoteText(c), /Please review the contributor roles/);
+test('CRediT: role normalization and classes', () => {
+  assert.deepEqual(P.classifyRole('writing - Review and Editing'), { name: RE, cls: 'writing' });
+  assert.deepEqual(P.classifyRole('  Data   curation '), { name: 'Data curation', cls: 'substantive' });
+  assert.deepEqual(P.classifyRole('Writing — original draft'), { name: OD, cls: 'writing' });
+  assert.equal(P.classifyRole('Project administration').cls, 'support');
+  assert.deepEqual(P.classifyRole('Coffee'), { name: 'Coffee', cls: 'unknown' });
+  assert.equal(P.CREDIT_ROLES.length, 14);
 });
 
-test('CRediT: author with no role -> bad', () => {
-  assert.equal(P.creditAssessment([A('A', [OD]), A('B', [])]).level, 'bad');
+test('CRediT case A: one author has all roles, 2–6 review & editing only -> RED', () => {
+  const c = credit([au(1, ALL), au(2, [RE]), au(3, [RE]), au(4, [RE]), au(5, [RE]), au(6, [RE])]);
+  assert.equal(c.level, 'red');
+  assert.equal(c.deficient.length, 5);
+  assert.ok(c.authors[0].allRoles);
+  const t = P.creditRedText(c);
+  assert.match(t, /Authors NAME 2, NAME 3, NAME 4, NAME 5 and NAME 6 are listed only under "Writing – review & editing"\./);
+  assert.match(t, /Author NAME 1 is listed under all contributor roles, including Supervision and Funding acquisition\./);
+  assert.match(t, /Acknowledgements/);
+  assert.doesNotMatch(t, /Author \d/); // names, never numbers
 });
 
-test('CRediT: single review-only author, no original draft -> warn', () => {
-  const c = P.creditAssessment([A('A', ['Methodology']), A('B', ['Software']), A('C', [RE])]);
-  assert.equal(c.level, 'warn');
-  assert.deepEqual(c.reasons, ['1 only review & editing', 'no original draft']);
-  assert.match(P.creditNoteText(c), /Please check that the contributor roles are complete/);
+test('CRediT case B: support-only + writing-only -> RED, plus no original draft', () => {
+  const c = credit([
+    au(1, ['Data curation', 'Formal analysis', 'Methodology', 'Software']),
+    au(2, ['Funding acquisition', 'Validation', 'Visualization']),
+    au(3, ['Conceptualization']), au(4, ['Investigation']),
+    au(5, ['Funding acquisition', 'Resources']), au(6, [RE]),
+    au(7, ['Conceptualization', 'Project administration']),
+  ]);
+  assert.equal(c.level, 'red');
+  assert.deepEqual(c.deficient.map((a) => [a.name, a.kind]), [['NAME 5', 'supportOnly'], ['NAME 6', 'writingOnly']]);
+  assert.ok(c.noOriginalDraft);
+  const t = P.creditRedText(c);
+  assert.match(t, /NAME 5 \("Funding acquisition" and "Resources"\); NAME 6 \("Writing – review & editing"\)/);
+  assert.match(t, /No author is listed under "Writing – original draft"/);
 });
 
-test('CRediT: senior with only supervision/funding -> warn', () => {
-  const c = P.creditAssessment([A('A', [OD, 'Methodology']), A('B', ['Supervision', 'Funding acquisition'])]);
-  assert.equal(c.level, 'warn');
-  assert.deepEqual(c.seniorOnly, ['B']);
+const caseC = () => [au(1, ['Methodology', OD]), au(2, ['Formal analysis']), au(3, ['Formal analysis']), au(4, ['Investigation', RE]), au(5, ['Methodology'])];
+
+test('CRediT case C: noWriting is informational only -> GREEN', () => {
+  const c = credit(caseC());
+  assert.equal(c.level, 'green');
+  assert.deepEqual(c.authors.filter((a) => a.noWriting).map((a) => a.order), ['2', '3', '5']);
+  assert.equal(P.creditText(c), '');
 });
 
-test('CRediT: everything else -> ok, no note', () => {
-  const c = P.creditAssessment([A('A', [OD, 'Methodology']), A('B', ['Software', RE])]);
-  assert.equal(c.level, 'ok');
-  assert.equal(P.creditNoteText(c), '');
+test('CRediT case D: one support-only author -> YELLOW', () => {
+  const list = caseC();
+  list[4] = au(5, ['Funding acquisition', 'Supervision']);
+  const c = credit(list);
+  assert.equal(c.level, 'yellow');
+  assert.equal(P.creditYellowText(c), 'CRediT note: NAME 5 has support roles only (Funding acquisition, Supervision). Not blocking; the authors may be asked to complete the statement at revision.');
+});
+
+test('CRediT case E: nobody has original draft -> YELLOW', () => {
+  const list = caseC();
+  list[0] = au(1, ['Methodology']);
+  const c = credit(list);
+  assert.equal(c.level, 'yellow');
+  assert.match(P.creditText(c), /no author credited with Writing – original draft/);
+});
+
+test('CRediT case F: an author with no roles -> RED', () => {
+  const c = credit([au(1, ['Conceptualization', OD]), au(2, [])]);
+  assert.equal(c.level, 'red');
+  assert.match(P.creditRedText(c), /No contributor roles are provided for author NAME 2\./);
+});
+
+test('CRediT case G: single author without a substantial role -> RED', () => {
+  const c = credit([au(1, [OD])]);
+  assert.equal(c.level, 'red');
+  assert.match(P.creditRedText(c), /Please specify your substantial contribution/);
+});
+
+test('CRediT: no statement at all, unknown roles', () => {
+  const c = credit([au(1, []), au(2, [])]);
+  assert.equal(c.level, 'red');
+  assert.ok(c.noCredit);
+  assert.match(P.creditRedText(c), /No contributor roles are provided for any author/);
+  const u = P.creditAuthor(au(1, ['Coffee', RE]));
+  assert.ok(u.noSubstantive);
+  assert.deepEqual(P.creditAuthorFlags(u), ['no substantial contribution', 'unrecognized role: Coffee']);
+});
+
+test('msColor: stable per manuscript, different across manuscripts', () => {
+  assert.equal(P.msColor('PR-D-26-00001'), P.msColor('PR-D-26-00001'));
+  assert.notEqual(P.msColor('PR-D-26-00001'), P.msColor('PR-D-26-00002R1'));
+  assert.match(P.msColor('PR-D-26-00001'), /^hsl\(\d+, 55%, 30%\)$/);
 });

@@ -121,6 +121,7 @@
     badge.append(chip, note);
     if (row.actions) {
       const triage = el('button', 'preh-triage-btn', 'Triage');
+      triage.style.background = triage.style.borderColor = P.msColor(ms); // same colour as the triage tab
       triage.type = 'button';
       triage.title = 'Open the triage cockpit';
       triage.addEventListener('click', (e) => {

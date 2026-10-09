@@ -75,10 +75,11 @@ test('em-parse DOM functions on fixtures', { skip: !chromium && 'playwright not 
     await t.test('parseAuthorStatusPage', async () => {
       const a = await run('parseAuthorStatusPage', fixture('author-status.html'));
       assert.equal(a.length, 4);
-      assert.equal(a[0].corresponding, true);
-      assert.deepEqual(a[0].roles, ['Conceptualization', 'Methodology', 'Writing – original draft']);
-      assert.equal(a[1].onlyReviewEditing, true);
-      assert.equal(a[1].confirmed, 'No Response');
+      assert.deepEqual(a.map((x) => x.order), ['1', '2', '3', '4']); // merged and sorted by Order
+      assert.equal(a[1].corresponding, true);
+      assert.deepEqual(a[1].roles, ['Conceptualization', 'Methodology', 'Writing – original draft']);
+      assert.equal(a[0].onlyReviewEditing, true);
+      assert.equal(a[0].confirmed, 'No Response');
       assert.equal(a[2].onlyReviewEditing, false);
       assert.equal(a[3].noRoles, true);
     });

@@ -156,6 +156,8 @@ check(await page.locator('.preh-cockpit').count() === 0, 'tabs: the list tab sta
 check(await tp.title() === 'PR-D-26-00001 · Triage', 'tabs: tab title is the manuscript number');
 check(await tp.evaluate(() => window.opener === null), 'tabs: opened with noopener');
 const color1 = await cockpit.locator('.preh-cockpit-bar').evaluate((e) => e.style.background);
+check(color1 === await list.locator('.preh-badge[data-ms="PR-D-26-00001"] .preh-triage-btn').evaluate((e) => e.style.background),
+  'tabs: the list Triage button has the same colour as the triage header');
 check(await cockpit.locator('.preh-cockpit-ms').textContent() === 'PR-D-26-00001', 'M2: header shows the manuscript number');
 check(await cockpit.locator('.preh-cockpit-status').inputValue() === 'Waiting (reply)', 'M2: header status loaded from storage');
 // Left: Similarity -> CrossCheckResults -> (fake) Turnitin
@@ -172,8 +174,23 @@ check(await sum('Duplicate').textContent() === 'EM 35% · title 82% · abstract 
 check(/preh-sum-bad/.test(await sum('Duplicate').getAttribute('class')), 'M2: duplicate summary is red');
 // Author Status (Details GET -> iframe)
 await tp.waitForFunction(() => /authors/.test([...document.querySelectorAll('.preh-cockpit .preh-panel .preh-sum')][1].textContent));
-check(await sum('Author Status').textContent() === '4 authors · CRediT 1 without roles', 'M2: author summary (CRediT rule)');
-check(/preh-sum-bad/.test(await sum('Author Status').getAttribute('class')), 'M2: CRediT red for an author without roles');
+check(await sum('Author Status').textContent() === 'CRediT: RED · 4 authors · 1 without roles · 1 without substantial contribution', 'CRediT: panel badge');
+check(/preh-sum-bad/.test(await sum('Author Status').getAttribute('class')), 'CRediT: RED shown in red');
+{
+  const det = cockpit.locator('.preh-credit');
+  const rows = det.locator('.preh-credit-row');
+  check(await rows.count() === 4 && await rows.nth(0).locator('.preh-credit-name').textContent() === '1. NAME B' &&
+    await rows.nth(1).locator('.preh-credit-name').textContent() === '2. NAME A', 'CRediT: one line per author, sorted by Order');
+  check(await rows.nth(0).locator('.preh-role-writing').count() === 1 && /no substantial contribution \(writing only\)/.test(await rows.nth(0).textContent()),
+    'CRediT: roles as chips by class, flags in words');
+  check(await rows.nth(1).locator('.preh-role-substantive').count() === 2, 'CRediT: substantive chips');
+  check(/no roles/.test(await rows.nth(3).textContent()), 'CRediT: no roles flag');
+  await det.locator('button', { hasText: 'Copy clarification text' }).click();
+  await tp.waitForTimeout(300);
+  const clip = await tp.evaluate(() => navigator.clipboard.readText());
+  check(/^Before your manuscript can be considered further/.test(clip) && /Author NAME B is listed only under "Writing – review & editing"\./.test(clip) &&
+    /No contributor roles are provided for author NAME D\./.test(clip), 'CRediT: Copy clarification text (with names)');
+}
 check(await tp.frame({ name: 'preh-authors' }).url().includes('ContributingAuthorStatus.aspx'), 'M2: author panel shows Author Status');
 // Evaluate: collapsed and not loaded until opened
 check(await tp.locator('iframe[name="preh-evaluate"]').count() === 0, 'M2: Evaluate not loaded while collapsed');
@@ -216,13 +233,13 @@ check(await tp.frame({ name: 'preh-duplicate' }).evaluate(() => window.__keep) =
 const drawer = cockpit.locator('.preh-checklist');
 check(await drawer.locator('input[type=checkbox]').count() === 11, 'M3: 11 checklist items');
 check(await drawer.locator('.preh-step', { hasText: '2 · Duplicate check' }).locator('.preh-sum').textContent() === 'EM 35% · title 82% · abstract 71% · 2 > 70%', 'M3: duplicate summary mirrored next to step 2');
-check(await drawer.locator('.preh-step', { hasText: '3 · Author Status' }).locator('.preh-sum').textContent() === '4 authors · CRediT 1 without roles', 'M3: author summary mirrored next to step 3');
+check(await drawer.locator('.preh-step', { hasText: '3 · Author Status' }).locator('.preh-sum').textContent() === 'CRediT: RED · 4 authors · 1 without roles · 1 without substantial contribution', 'M3: author summary mirrored next to step 3');
 // Insert CRediT note appends the standard text to the manuscript note
 await drawer.locator('.preh-credit-btn').click();
 await page.waitForTimeout(300);
 const creditNote = await drawer.locator('.preh-checklist-note').inputValue();
-check(creditNote.startsWith('synthetic note\n\nCRediT author contributions:') && /No contribution role is given for NAME D/.test(creditNote) &&
-  /NAME B is listed only under "Writing – review & editing"/.test(creditNote) && /Please review the contributor roles/.test(creditNote), 'CRediT: standard text appended to the note');
+check(creditNote.startsWith('synthetic note\n\nBefore your manuscript can be considered further') && /Author NAME B is listed only under/.test(creditNote) &&
+  /No contributor roles are provided for author NAME D\./.test(creditNote), 'CRediT: clarification text appended to the note');
 check((await sw.evaluate(() => chrome.storage.local.get('ms:PR-D-26-00001')))['ms:PR-D-26-00001'].note === creditNote, 'CRediT: note saved');
 await drawer.locator('.preh-checklist-note').fill('synthetic note');
 await page.waitForTimeout(500);

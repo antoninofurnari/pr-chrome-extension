@@ -119,3 +119,18 @@
 .preh-panel-head strong { white-space: nowrap; }
 .preh-panel-head .preh-sum { flex: 0 1 auto; white-space: normal; text-align: right; }
 .preh-credit-btn { margin: 4px 0 0 22px; }
+
+/* CRediT details in the Author Status panel */
+.preh-credit { flex: 0 0 auto; max-height: 45%; overflow: auto; padding: 4px 10px 6px; border-bottom: 1px solid #c8d2de; background: #fbfcfd; font-size: 12px; }
+.preh-credit > summary { cursor: pointer; font-weight: 600; color: #1f3a5f; margin-bottom: 3px; }
+.preh-credit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 2px 0; }
+.preh-credit-deficient .preh-credit-name { color: #9b1c1c; font-weight: 600; }
+.preh-credit-name { margin-right: 4px; }
+.preh-role { padding: 0 6px; border-radius: 8px; font-size: 11px; border: 1px solid transparent; }
+.preh-role-substantive { background: #dcfce7; color: #166534; }
+.preh-role-writing { background: #dbeafe; color: #1e40af; }
+.preh-role-support { background: #fef3c7; color: #92400e; }
+.preh-role-unknown { background: #fff; color: #9b1c1c; border-color: #e3a3a3; }
+.preh-credit-flags { color: #9b1c1c; font-size: 11px; margin-left: 4px; }
+.preh-credit-paper { color: #92400e; margin-top: 3px; }
+.preh-credit .preh-copy { margin: 5px 0 0; }
